@@ -100,7 +100,16 @@ export function OnboardingScreen({ index, next }: { index: number; next: () => v
   const pageWidth = width - 44;
   const scrollRef = useRef<ScrollView>(null);
   const [active, setActive] = useState(index);
+  const orbitMotion = useRef(new Animated.Value(0)).current;
+  const floatMotion = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    const orbitAnimation = Animated.loop(Animated.timing(orbitMotion, { toValue: 1, duration: 8200, easing: Easing.linear, useNativeDriver: true }));
+    const floatAnimation = Animated.loop(Animated.sequence([
+      Animated.timing(floatMotion, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(floatMotion, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    orbitAnimation.start();
+    floatAnimation.start();
     const timer = setInterval(() => {
       setActive((current) => {
         const target = (current + 1) % onboarding.length;
@@ -108,20 +117,38 @@ export function OnboardingScreen({ index, next }: { index: number; next: () => v
         return target;
       });
     }, 4200);
-    return () => clearInterval(timer);
-  }, [pageWidth]);
+    return () => {
+      clearInterval(timer);
+      orbitAnimation.stop();
+      floatAnimation.stop();
+    };
+  }, [floatMotion, orbitMotion, pageWidth]);
+  const orbitRotation = orbitMotion.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const reverseOrbitRotation = orbitMotion.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+  const floatingCoin = {
+    transform: [
+      { translateY: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [5, -8] }) },
+      { scale: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.04] }) },
+    ],
+  };
   const finishScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => setActive(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
   return (
     <Screen>
       <ScrollView ref={scrollRef} style={styles.onboardingPager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={finishScroll} scrollEventThrottle={16}>
         {onboarding.map((item, page) => <View key={item.title} style={{ width: pageWidth }}>
           <View style={styles.onboardingArt}>
-            <View style={[styles.orbit, { borderColor: `${item.accent}55` }]}><View style={[styles.orbitNode, { backgroundColor: item.accent }]} /></View>
-            <LinearGradient colors={[item.accent, '#121936']} style={[styles.artCoin, page === active && styles.artCoinActive]}>
-              <Ionicons name={item.icon} size={74} color="#E9EBFF" />
-            </LinearGradient>
-            <View style={[styles.miniCoin, { left: 28, top: 120, backgroundColor: '#F7931A' }]}><Text style={styles.miniCoinText}>₿</Text></View>
-            <View style={[styles.miniCoin, { right: 25, top: 85, backgroundColor: '#627EEA' }]}><Text style={styles.miniCoinText}>◆</Text></View>
+            <Animated.View style={[styles.orbit, { borderColor: `${item.accent}55`, transform: [{ rotate: orbitRotation }] }]}>
+              <View style={[styles.orbitNode, { backgroundColor: item.accent }]} />
+              <Animated.View style={[styles.miniCoin, styles.bitcoinOrbiter, { backgroundColor: '#F7931A', transform: [{ rotate: reverseOrbitRotation }] }]}><Text style={styles.miniCoinText}>₿</Text></Animated.View>
+            </Animated.View>
+            <Animated.View style={[styles.innerOrbit, { borderColor: `${item.accent}35`, transform: [{ rotate: reverseOrbitRotation }] }]}>
+              <Animated.View style={[styles.miniCoin, styles.ethereumOrbiter, { backgroundColor: '#627EEA', transform: [{ rotate: orbitRotation }] }]}><Text style={styles.miniCoinText}>◆</Text></Animated.View>
+            </Animated.View>
+            <Animated.View style={[styles.animatedArtCoin, floatingCoin]}>
+              <LinearGradient colors={[item.accent, '#121936']} style={[styles.artCoin, page === active && styles.artCoinActive]}>
+                <Ionicons name={item.icon} size={74} color="#E9EBFF" />
+              </LinearGradient>
+            </Animated.View>
           </View>
           <View style={styles.onboardingCopy}><Text style={commonStyles.title}>{item.title}</Text><Text style={[commonStyles.subtitle, { marginTop: 14 }]}>{item.body}</Text></View>
         </View>)}
@@ -358,24 +385,26 @@ function AssetRow({ asset, onPress }: { asset: Asset; onPress: () => void }) {
 
 export function HomeScreen({ data, navigate, offline }: { data: Bootstrap; navigate: Navigate; offline: boolean }) {
   return (
-    <Screen>
-      <View style={styles.homeHeader}>
-        <LogoMark size={34} />
-        <View style={styles.headerIcons}><Ionicons name="notifications-outline" size={24} color={colors.text} /><Pressable onPress={() => navigate('profile')}><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></View>
-      </View>
-      {offline ? <View style={styles.offline}><Ionicons name="cloud-offline-outline" size={15} color={colors.warning} /><Text style={styles.offlineText}>Modo local: inicia la API para guardar cambios</Text></View> : null}
-      <Text style={styles.balance}>{money(data.wallet.totalUsd)}</Text>
-      <Text style={styles.gain}>▲ +{data.wallet.change24h.toFixed(2)}% (24h)</Text>
-      <View style={styles.quickRow}>
-        <ActionButton icon="arrow-up" label="Enviar" onPress={() => navigate('send')} />
-        <ActionButton icon="arrow-down" label="Recibir" onPress={() => navigate('receive')} />
-        <ActionButton icon="swap-horizontal" label="Swap" onPress={() => navigate('swap')} />
-        <ActionButton icon="card-outline" label="Comprar" onPress={() => navigate('buy')} />
-      </View>
-      <View style={styles.assetTabs}><Text style={styles.assetTabActive}>Activos</Text><Text style={styles.assetTab}>NFTs</Text><Text style={styles.assetTab}>DeFi</Text></View>
-      <ScrollView style={styles.assetList} showsVerticalScrollIndicator={false}>{data.assets.map((asset) => <AssetRow key={asset.symbol} asset={asset} onPress={() => navigate('asset', asset)} />)}</ScrollView>
+    <View style={styles.mainShell}>
+      <Screen style={styles.homeScreen}>
+        <View style={styles.homeHeader}>
+          <LogoMark size={34} />
+          <View style={styles.headerIcons}><Ionicons name="notifications-outline" size={24} color={colors.text} /><Pressable onPress={() => navigate('profile')}><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></View>
+        </View>
+        {offline ? <View style={styles.offline}><Ionicons name="cloud-offline-outline" size={15} color={colors.warning} /><Text style={styles.offlineText}>Modo local: inicia la API para guardar cambios</Text></View> : null}
+        <Text style={styles.balance}>{money(data.wallet.totalUsd)}</Text>
+        <Text style={styles.gain}>▲ +{data.wallet.change24h.toFixed(2)}% (24h)</Text>
+        <View style={styles.quickRow}>
+          <ActionButton icon="arrow-up" label="Enviar" onPress={() => navigate('send')} />
+          <ActionButton icon="arrow-down" label="Recibir" onPress={() => navigate('receive')} />
+          <ActionButton icon="swap-horizontal" label="Swap" onPress={() => navigate('swap')} />
+          <ActionButton icon="card-outline" label="Comprar" onPress={() => navigate('buy')} />
+        </View>
+        <View style={styles.assetTabs}><Text style={styles.assetTabActive}>Activos</Text><Text style={styles.assetTab}>NFTs</Text><Text style={styles.assetTab}>DeFi</Text></View>
+        <ScrollView style={styles.assetList} showsVerticalScrollIndicator={false}>{data.assets.map((asset) => <AssetRow key={asset.symbol} asset={asset} onPress={() => navigate('asset', asset)} />)}</ScrollView>
+      </Screen>
       <BottomNav active="home" navigate={navigate} />
-    </Screen>
+    </View>
   );
 }
 
@@ -516,7 +545,7 @@ export function ExploreScreen({ dapps, navigate }: { dapps: Dapp[]; navigate: Na
         <View style={styles.pageTitleRow}><Text style={commonStyles.title}>Explorar</Text><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></View>
         <View style={styles.search}><Ionicons name="search" color={colors.muted} size={20} /><TextInput value={query} onChangeText={setQuery} style={styles.searchInput} placeholder="Buscar protocolos y mercados..." placeholderTextColor={colors.muted} /></View>
         <LinearGradient colors={['#262B70', '#172A50', '#0E1B2D']} style={styles.marketHero}><View><Text style={styles.marketEyebrow}>MERCADO SIMULADO</Text><Text style={styles.marketTitle}>Oportunidades Web3</Text><Text style={styles.marketCopy}>Protocolos, rendimientos y tendencias en un solo lugar.</Text></View><View style={styles.marketOrb}><Ionicons name="analytics" size={31} color="#74E8FF" /></View></LinearGradient>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['Todo', 'DeFi', 'NFT', 'Gaming', 'Bridge'].map((chip) => <Pressable key={chip} onPress={() => setCategory(chip)} style={[styles.chip, chip === category && styles.chipActive]}><Text style={[styles.chipText, chip === category && { color: '#FFF' }]}>{chip}</Text></Pressable>)}</ScrollView>
+        <ScrollView horizontal style={styles.chipScroller} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['Todo', 'DeFi', 'NFT', 'Gaming', 'Bridge'].map((chip) => <Pressable key={chip} onPress={() => setCategory(chip)} style={[styles.chip, chip === category && styles.chipActive]}><Text style={[styles.chipText, chip === category && { color: '#FFF' }]}>{chip}</Text></Pressable>)}</ScrollView>
         <ScrollView showsVerticalScrollIndicator={false}>{filtered.length ? filtered.map((dapp) => <DappRow key={dapp.id} dapp={dapp} onPress={() => showDialog({ title: dapp.name, message: `${dapp.description}. Los datos mostrados son simulados; la conexión financiera se habilitará en una etapa posterior.`, tone: 'info' })} />) : <View style={styles.emptyCompact}><Ionicons name="search-outline" size={30} color="#7772FF" /><Text style={styles.emptyTitle}>Sin resultados</Text><Text style={styles.emptyBody}>Prueba otra búsqueda o categoría.</Text></View>}</ScrollView>
         {dialog}
       </Screen>
@@ -630,17 +659,23 @@ export function CardsScreen({ data, navigate, addCard, setDefault }: { data: Boo
   const [nickname, setNickname] = useState('Personal');
   const [holderName, setHolderName] = useState(data.user.displayName);
   const [brand, setBrand] = useState<PaymentCard['brand']>('Visa');
-  const [lastFour, setLastFour] = useState(() => String(Math.floor(1000 + Math.random() * 9000)));
+  const [cardNumber, setCardNumber] = useState('');
   const [month, setMonth] = useState('12');
   const [year, setYear] = useState(String(new Date().getFullYear() + 4));
   const { showDialog, dialog } = useWalletDialog();
   const colorsByBrand = { Visa: '#4659E8', Mastercard: '#D75A32', Amex: '#1487A8' };
+  const cardDigits = cardNumber.replace(/\D/g, '');
+  const expectedDigits = brand === 'Amex' ? 15 : 16;
+  const formattedCardNumber = brand === 'Amex'
+    ? [cardDigits.slice(0, 4), cardDigits.slice(4, 10), cardDigits.slice(10, 15)].filter(Boolean).join(' ')
+    : cardDigits.replace(/(.{4})/g, '$1 ').trim();
+  const updateCardNumber = (value: string) => setCardNumber(value.replace(/\D/g, '').slice(0, expectedDigits));
   const save = async () => {
     try {
       setBusy(true);
-      await addCard({ nickname, holderName, brand, lastFour, expiryMonth: Number(month), expiryYear: Number(year), color: colorsByBrand[brand] });
+      await addCard({ nickname, holderName, brand, lastFour: cardDigits.slice(-4), expiryMonth: Number(month), expiryYear: Number(year), color: colorsByBrand[brand] });
       setAdding(false);
-      setLastFour(String(Math.floor(1000 + Math.random() * 9000)));
+      setCardNumber('');
       showDialog({ title: 'Tarjeta virtual agregada', message: 'Ya puedes seleccionarla como método en tus compras simuladas.', tone: 'success' });
     } catch (error) { showDialog({ title: 'No se pudo agregar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
     finally { setBusy(false); }
@@ -650,15 +685,16 @@ export function CardsScreen({ data, navigate, addCard, setDefault }: { data: Boo
     <Text style={commonStyles.title}>Métodos de pago</Text>
     <Text style={[commonStyles.subtitle, { marginTop: 7, marginBottom: 18 }]}>Tarjetas ficticias para probar compras y movimientos sin realizar cargos reales.</Text>
     {data.cards.map((card) => <Pressable key={card.id} onPress={async () => { if (!card.isDefault) { try { await setDefault(card.id); showDialog({ title: 'Tarjeta principal actualizada', message: `${card.brand} terminada en ${card.lastFour} se usará por defecto.`, tone: 'success' }); } catch (error) { showDialog({ title: 'No se pudo actualizar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } } }} style={styles.cardStack}><VirtualCard card={card} /></Pressable>)}
-    {!data.cards.length ? <View style={styles.emptyCompact}><Ionicons name="card-outline" size={34} color="#8883FF" /><Text style={styles.emptyTitle}>No tienes tarjetas virtuales</Text><Text style={styles.emptyBody}>Agrega una para habilitar las compras simuladas.</Text></View> : null}
+    {!data.cards.length ? <View style={[styles.emptyCompact, styles.cardsEmpty]}><Ionicons name="card-outline" size={34} color="#8883FF" /><Text style={styles.emptyTitle}>No tienes tarjetas virtuales</Text><Text style={styles.emptyBody}>Agrega una para habilitar las compras simuladas.</Text></View> : null}
     {adding ? <Card style={styles.cardForm}>
       <Text style={commonStyles.sectionTitle}>Nueva tarjeta ficticia</Text>
-      <Text style={commonStyles.label}>Marca</Text><View style={styles.brandRow}>{(['Visa', 'Mastercard', 'Amex'] as const).map((item) => <Pressable key={item} onPress={() => setBrand(item)} style={[styles.brandChip, brand === item && styles.brandChipActive]}><Text style={styles.brandChipText}>{item}</Text></Pressable>)}</View>
+      <Text style={commonStyles.label}>Marca</Text><View style={styles.brandRow}>{(['Visa', 'Mastercard', 'Amex'] as const).map((item) => <Pressable key={item} onPress={() => { setBrand(item); setCardNumber((current) => current.slice(0, item === 'Amex' ? 15 : 16)); }} style={[styles.brandChip, brand === item && styles.brandChipActive]}><Text style={styles.brandChipText}>{item}</Text></Pressable>)}</View>
       <Text style={commonStyles.label}>Alias</Text><TextInput value={nickname} onChangeText={setNickname} style={commonStyles.input} placeholder="Personal" placeholderTextColor={colors.muted} />
       <Text style={commonStyles.label}>Titular</Text><TextInput value={holderName} onChangeText={setHolderName} style={commonStyles.input} placeholder="Nombre" placeholderTextColor={colors.muted} />
-      <Text style={commonStyles.label}>Últimos 4 ficticios</Text><TextInput value={lastFour} onChangeText={(value) => setLastFour(value.replace(/\D/g, '').slice(0, 4))} style={commonStyles.input} keyboardType="number-pad" />
+      <Text style={commonStyles.label}>Número de tarjeta ficticia</Text><TextInput value={formattedCardNumber} onChangeText={updateCardNumber} style={commonStyles.input} keyboardType="number-pad" placeholder={brand === 'Amex' ? '3782 822463 10005' : '4242 4242 4242 4242'} placeholderTextColor={colors.muted} maxLength={expectedDigits + 3} />
+      <View style={styles.cardPrivacy}><Ionicons name="shield-checkmark-outline" size={16} color="#7DEBFF" /><Text style={styles.cardPrivacyText}>Se usa para simular el ingreso; únicamente se conservan los últimos 4 dígitos.</Text></View>
       <View style={styles.expiryRow}><View style={styles.flex}><Text style={commonStyles.label}>Mes</Text><TextInput value={month} onChangeText={(value) => setMonth(value.replace(/\D/g, '').slice(0, 2))} style={commonStyles.input} keyboardType="number-pad" /></View><View style={styles.flex}><Text style={commonStyles.label}>Año</Text><TextInput value={year} onChangeText={(value) => setYear(value.replace(/\D/g, '').slice(0, 4))} style={commonStyles.input} keyboardType="number-pad" /></View></View>
-      <GradientButton label={busy ? 'Guardando...' : 'Agregar tarjeta'} disabled={busy || nickname.length < 2 || holderName.length < 2 || lastFour.length !== 4} onPress={() => void save()} />
+      <GradientButton label={busy ? 'Guardando...' : 'Agregar tarjeta'} disabled={busy || nickname.length < 2 || holderName.length < 2 || cardDigits.length !== expectedDigits} onPress={() => void save()} />
       <OutlineButton label="Cancelar" onPress={() => setAdding(false)} />
     </Card> : <GradientButton label="Agregar tarjeta virtual" icon="add" onPress={() => setAdding(true)} />}
     {dialog}
@@ -714,9 +750,13 @@ const styles = StyleSheet.create({
   onboardingArt: { flex: 1.1, minHeight: 360, alignItems: 'center', justifyContent: 'center' },
   orbit: { position: 'absolute', width: 270, height: 270, borderRadius: 135, borderWidth: 1 },
   orbitNode: { position: 'absolute', width: 12, height: 12, borderRadius: 6, top: 18, right: 38, shadowColor: '#7A70FF', shadowOpacity: 1, shadowRadius: 12 },
+  innerOrbit: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1 },
+  animatedArtCoin: { zIndex: 2 },
   artCoin: { width: 175, height: 175, borderRadius: 88, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], ...shadow },
   artCoinActive: { borderWidth: 1, borderColor: 'rgba(255,255,255,.18)' },
   miniCoin: { position: 'absolute', width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', opacity: 0.9 },
+  bitcoinOrbiter: { left: -25, top: 100 },
+  ethereumOrbiter: { right: -25, top: 34 },
   miniCoinText: { color: '#FFF', fontSize: 30, fontWeight: '900' },
   onboardingCopy: { minHeight: 190, justifyContent: 'center' },
   onboardingBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16 },
@@ -760,6 +800,7 @@ const styles = StyleSheet.create({
   key: { width: '28%', aspectRatio: 1.55, maxHeight: 68, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   keyText: { color: colors.text, fontSize: 24, fontWeight: '600' },
   homeHeader: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  homeScreen: { paddingBottom: 0 },
   headerIcons: { flexDirection: 'row', gap: 20, alignItems: 'center' },
   offline: { flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#2A2214', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
   offlineText: { color: colors.warning, fontSize: 11 },
@@ -823,10 +864,11 @@ const styles = StyleSheet.create({
   marketTitle: { color: '#FFF', fontSize: 21, fontWeight: '800', marginTop: 7 },
   marketCopy: { color: '#BBC5D8', fontSize: 12.5, lineHeight: 18, width: 225, marginTop: 5 },
   marketOrb: { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(75,214,255,.12)', borderWidth: 1, borderColor: 'rgba(102,225,255,.3)', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
-  chips: { gap: 9, paddingVertical: 16 },
-  chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  chipScroller: { flexGrow: 0, height: 62 },
+  chips: { gap: 9, paddingVertical: 10, alignItems: 'center' },
+  chip: { height: 42, minWidth: 64, paddingHorizontal: 18, borderRadius: 21, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   chipActive: { backgroundColor: '#6672FF', borderColor: '#6672FF' },
-  chipText: { color: colors.muted, fontWeight: '600' },
+  chipText: { color: colors.muted, fontWeight: '600', lineHeight: 18, includeFontPadding: false },
   dappRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 14 },
   rowPressed: { opacity: 0.65, transform: [{ scale: 0.99 }] },
   dappIcon: { width: 51, height: 51, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
@@ -872,6 +914,9 @@ const styles = StyleSheet.create({
   cardValue: { color: '#FFF', fontSize: 12, fontWeight: '700', marginTop: 4 },
   cardStack: { marginBottom: 16 },
   cardForm: { gap: 11, marginVertical: 18 },
+  cardsEmpty: { marginBottom: 20 },
+  cardPrivacy: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingHorizontal: 3 },
+  cardPrivacyText: { color: colors.muted, fontSize: 11.5, lineHeight: 17, flex: 1 },
   brandRow: { flexDirection: 'row', gap: 8 },
   brandChip: { flex: 1, minHeight: 43, borderRadius: 14, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   brandChipActive: { borderColor: '#7D74FF', backgroundColor: '#272653' },
