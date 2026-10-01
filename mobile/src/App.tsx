@@ -1,6 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Loading } from './components';
 import { ApiRequestError, loadWallet, restoreSession, walletApi } from './api';
@@ -10,6 +9,7 @@ import {
   AssetScreen,
   AuthScreen,
   BuyScreen,
+  CardsScreen,
   CreateWalletScreen,
   ExploreScreen,
   HomeScreen,
@@ -25,7 +25,7 @@ import {
   WelcomeScreen,
   firstAsset,
 } from './screens';
-import type { AppScreen, Asset, Bootstrap } from './types';
+import type { AppScreen, Asset, Bootstrap, PaymentCard } from './types';
 
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('splash');
@@ -94,7 +94,6 @@ export default function App() {
     setData(null);
     setSelectedAsset(null);
     navigate('welcome');
-    Alert.alert('Sesión cerrada', 'Tu sesión local se cerró correctamente.');
   };
 
   const completePin = async () => {
@@ -119,10 +118,18 @@ export default function App() {
       await refresh();
       return result.received;
     };
-    const buy = async (target: Asset, usdAmount: number) => {
-      const result = await walletApi.buy({ symbol: target.symbol, usdAmount });
+    const buy = async (target: Asset, usdAmount: number, cardId: number) => {
+      const result = await walletApi.buy({ symbol: target.symbol, usdAmount, cardId });
       await refresh();
       return result.received;
+    };
+    const addCard = async (card: Omit<PaymentCard, 'id' | 'isDefault'>) => {
+      await walletApi.addPaymentCard(card);
+      await refresh();
+    };
+    const setDefaultCard = async (cardId: number) => {
+      await walletApi.setDefaultPaymentCard(cardId);
+      await refresh();
     };
 
     switch (screen) {
@@ -135,7 +142,8 @@ export default function App() {
       case 'activity': return <ActivityScreen transactions={data.transactions} navigate={navigate} />;
       case 'profile': return <ProfileScreen data={data} navigate={navigate} logout={logout} />;
       case 'admin': return <AdminScreen assets={data.assets} navigate={navigate} loadUsers={async () => (await walletApi.adminUsers()).users} submit={async (userId, symbol, amount) => (await walletApi.adminFund({ userId, symbol, amount })).recipientName} />;
-      case 'buy': return <BuyScreen assets={data.assets} navigate={navigate} submit={buy} />;
+      case 'cards': return <CardsScreen data={data} navigate={navigate} addCard={addCard} setDefault={setDefaultCard} />;
+      case 'buy': return <BuyScreen assets={data.assets} cards={data.cards} navigate={navigate} submit={buy} />;
       default: return <HomeScreen data={data} navigate={navigate} offline={false} />;
     }
   };
@@ -143,9 +151,9 @@ export default function App() {
   let content;
   switch (screen) {
     case 'splash': content = <SplashScreen next={() => navigate(authenticated ? 'home' : 'onboarding1')} />; break;
-    case 'onboarding1': content = <OnboardingScreen index={0} next={() => navigate('onboarding2')} />; break;
-    case 'onboarding2': content = <OnboardingScreen index={1} next={() => navigate('onboarding3')} />; break;
-    case 'onboarding3': content = <OnboardingScreen index={2} next={() => navigate('welcome')} />; break;
+    case 'onboarding1':
+    case 'onboarding2':
+    case 'onboarding3': content = <OnboardingScreen index={0} next={() => navigate('welcome')} />; break;
     case 'welcome': content = <WelcomeScreen navigate={navigate} />; break;
     case 'login': content = <AuthScreen mode="login" navigate={navigate} submit={(values) => authenticate('login', values)} />; break;
     case 'register': content = <AuthScreen mode="register" navigate={navigate} submit={(values) => authenticate('register', values)} />; break;

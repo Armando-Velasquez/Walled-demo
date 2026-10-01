@@ -41,12 +41,25 @@ export type Dapp = {
   color: string;
 };
 
+export type PaymentCard = {
+  id: number;
+  nickname: string;
+  holderName: string;
+  brand: 'Visa' | 'Mastercard' | 'Amex';
+  lastFour: string;
+  expiryMonth: number;
+  expiryYear: number;
+  color: string;
+  isDefault: boolean;
+};
+
 export type Bootstrap = {
   user: User;
   wallet: Wallet;
   assets: Asset[];
   transactions: Transaction[];
   dapps: Dapp[];
+  cards: PaymentCard[];
 };
 
 export type User = {
@@ -94,4 +107,5 @@ export type AppScreen =
   | 'activity'
   | 'profile'
   | 'admin'
+  | 'cards'
   | 'buy';

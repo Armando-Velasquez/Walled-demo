@@ -30,4 +30,7 @@ export const demoData: Bootstrap = {
     { id: 4, name: 'OpenSea', category: 'NFT', description: 'Mercado de coleccionables', color: '#2081E2' },
     { id: 5, name: 'PancakeSwap', category: 'DeFi', description: 'Intercambio multicadena', color: '#D1884F' },
   ],
+  cards: [
+    { id: 1, nickname: 'Principal', holderName: 'ADMINISTRADOR', brand: 'Visa', lastFour: '4242', expiryMonth: 12, expiryYear: 2030, color: '#625EFF', isDefault: true },
+  ],
 };

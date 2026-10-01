@@ -77,6 +77,23 @@ CREATE TABLE IF NOT EXISTS dapps (
   sort_order INT NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS payment_cards (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  wallet_id BIGINT UNSIGNED NOT NULL,
+  nickname VARCHAR(50) NOT NULL,
+  holder_name VARCHAR(100) NOT NULL,
+  brand ENUM('Visa','Mastercard','Amex') NOT NULL,
+  last_four CHAR(4) NOT NULL,
+  expiry_month TINYINT UNSIGNED NOT NULL,
+  expiry_year SMALLINT UNSIGNED NOT NULL,
+  color CHAR(7) NOT NULL DEFAULT '#625EFF',
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_payment_card_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_cards_wallet ON payment_cards(wallet_id, is_default);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   user_id BIGINT UNSIGNED NOT NULL,

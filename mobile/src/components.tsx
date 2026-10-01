@@ -1,11 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useRef, type PropsWithChildren, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Animated,
   Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,9 +31,44 @@ export function Screen({ children, scroll = false, style }: PropsWithChildren<{ 
   const content = <Animated.View style={[styles.screenContent, style, animatedStyle]}>{children}</Animated.View>;
   return (
     <SafeAreaView style={styles.safe}>
-      {scroll ? <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>{content}</ScrollView> : content}
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
+        {scroll ? <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">{content}</ScrollView> : content}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+type DialogTone = 'success' | 'error' | 'info';
+type DialogState = { title: string; message: string; tone?: DialogTone; confirmLabel?: string; onConfirm?: () => void } | null;
+
+export function WalletDialog({ state, close }: { state: DialogState; close: () => void }) {
+  const scale = useRef(new Animated.Value(0.88)).current;
+  useEffect(() => {
+    if (state) Animated.spring(scale, { toValue: 1, damping: 16, stiffness: 180, useNativeDriver: true }).start();
+    else scale.setValue(0.88);
+  }, [scale, state]);
+  if (!state) return null;
+  const icon = state.tone === 'success' ? 'checkmark-circle' : state.tone === 'error' ? 'alert-circle' : 'sparkles';
+  const accent = state.tone === 'success' ? colors.success : state.tone === 'error' ? colors.danger : '#8B82FF';
+  return (
+    <Modal transparent visible animationType="fade" statusBarTranslucent onRequestClose={close}>
+      <View style={styles.dialogBackdrop}>
+        <Animated.View style={[styles.dialogCard, { transform: [{ scale }] }]}>
+          <View style={[styles.dialogIcon, { backgroundColor: `${accent}22` }]}><Ionicons name={icon} size={34} color={accent} /></View>
+          <Text style={styles.dialogTitle}>{state.title}</Text>
+          <Text style={styles.dialogMessage}>{state.message}</Text>
+          <GradientButton label={state.confirmLabel || 'Entendido'} onPress={() => { close(); state.onConfirm?.(); }} />
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+export function useWalletDialog() {
+  const [dialogState, setDialogState] = useState<DialogState>(null);
+  const showDialog = useCallback((state: NonNullable<DialogState>) => setDialogState(state), []);
+  const dialog = <WalletDialog state={dialogState} close={() => setDialogState(null)} />;
+  return { showDialog, dialog };
 }
 
 export function GradientButton({ label, onPress, disabled, icon }: { label: string; onPress: () => void; disabled?: boolean; icon?: keyof typeof Ionicons.glyphMap }) {
@@ -133,8 +171,9 @@ export const commonStyles = StyleSheet.create({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  keyboard: { flex: 1 },
   screenContent: { flex: 1, paddingHorizontal: 22, paddingBottom: 18 },
-  scroll: { flexGrow: 1 },
+  scroll: { flexGrow: 1, paddingBottom: 150 },
   center: { alignItems: 'center', justifyContent: 'center', gap: 22 },
   buttonWrap: { borderRadius: radii.medium, overflow: 'hidden', ...shadow },
   gradientButton: { minHeight: 58, borderRadius: radii.medium, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, paddingHorizontal: 22 },
@@ -154,4 +193,9 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   tabLabel: { color: colors.muted, fontSize: 10.5 },
   mainTab: { width: 56, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: -20, ...shadow },
+  dialogBackdrop: { flex: 1, backgroundColor: 'rgba(2,4,10,.78)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  dialogCard: { width: '100%', maxWidth: 420, borderRadius: 28, backgroundColor: '#111722', borderWidth: 1, borderColor: '#30394A', padding: 24, ...shadow },
+  dialogIcon: { width: 62, height: 62, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  dialogTitle: { color: colors.text, fontSize: 22, fontWeight: '800', marginBottom: 9 },
+  dialogMessage: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: 22 },
 });

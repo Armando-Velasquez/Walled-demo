@@ -17,7 +17,7 @@ Esta entrega es una simulación local de una wallet móvil. No custodia fondos, 
 2. Registro, confirmación obligatoria por correo o inicio de sesión persistente.
 3. Creación automática de una wallet ficticia por cuenta y PIN cifrado.
 4. Portafolio principal y detalle de activos.
-5. Transferir activos entre cuentas por correo o dirección, comprar e intercambiar.
+5. Transferir activos entre cuentas por correo o dirección, comprar con una tarjeta virtual e intercambiar.
 6. Administrar usuarios y acreditar saldos desde la cuenta principal.
 7. Explorar dApps, actividad, perfil y cierre de sesión.
 
@@ -34,6 +34,8 @@ Esta entrega es una simulación local de una wallet móvil. No custodia fondos, 
 - `GET /api/v1/assets/:symbol`: detalle de un activo.
 - `POST /api/v1/transactions/send`: transferencia interna atómica entre dos wallets.
 - `POST /api/v1/transactions/buy`: compra simulada.
+- `POST /api/v1/payment-cards`: agrega una tarjeta ficticia almacenando únicamente datos simulados y últimos cuatro dígitos.
+- `PUT /api/v1/payment-cards/:id/default`: selecciona el método virtual principal.
 - `POST /api/v1/swap`: intercambio simulado.
 - `PUT /api/v1/onboarding`: finalización del onboarding.
 - `GET /api/v1/admin/users`: listado de usuarios, sólo para administradores.
@@ -41,7 +43,7 @@ Esta entrega es una simulación local de una wallet móvil. No custodia fondos, 
 
 Todas las rutas bajo `/api/v1`, excepto registro, login y confirmación de correo, requieren `Authorization: Bearer <token>`. Las contraseñas y PIN se guardan con scrypt; en la base sólo se almacena el hash SHA-256 de cada token de sesión.
 
-Los correos salen mediante Nodemailer y SMTP. La clave de aplicación vive exclusivamente en `SMTP_PASS`. Los códigos de seis dígitos caducan en 15 minutos, permiten cinco intentos y se guardan como HMAC, no en texto claro. Registro, login y movimientos generan mensajes en `email_outbox`; un worker los entrega y reintenta temporalmente si el proveedor SMTP falla.
+Los correos salen mediante Nodemailer y SMTP. La clave de aplicación vive exclusivamente en `SMTP_PASS`. Los códigos de seis dígitos caducan en 15 minutos, permiten cinco intentos y se guardan como HMAC, no en texto claro. Registro, login y movimientos generan mensajes en `email_outbox`; un worker los entrega y reintenta temporalmente si el proveedor SMTP falla. Las plantillas anuncian `color-scheme` y tienen estilos específicos para clientes en modo claro y oscuro.
 
 Las operaciones que modifican balances usan transacciones de base de datos para evitar actualizaciones parciales. En una transferencia se descuenta al emisor y se acredita al receptor dentro de la misma transacción SQL, registrando un movimiento para cada parte. La API añade una espera corta para representar el procesamiento y la app bloquea el botón mientras muestra el estado correspondiente.
 
@@ -49,7 +51,7 @@ Las cuentas nuevas reciben una fila de balance por activo con valor cero. La cue
 
 ## Movimiento visual
 
-Las pantallas entran con una transición combinada de desplazamiento y opacidad. Los botones principales tienen respuesta elástica al presionarlos y el logo mantiene una pulsación sutil continua. Todo se implementa con `Animated` y `useNativeDriver` de React Native.
+Las pantallas entran con una transición combinada de desplazamiento y opacidad. Los botones principales tienen respuesta elástica al presionarlos y el logo mantiene una pulsación sutil continua. Splash incorpora un anillo orbital animado; el onboarding avanza automáticamente, admite deslizamiento horizontal y conserva navegación manual. Los avisos usan un modal propio en lugar del diálogo nativo. Todo se implementa con `Animated` y `useNativeDriver` de React Native.
 
 ## Sustitución futura por integraciones reales
 

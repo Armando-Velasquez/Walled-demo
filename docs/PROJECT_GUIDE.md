@@ -134,6 +134,7 @@ flowchart TD
     home --> explore["Explorar"]
     home --> activity["Actividad"]
     home --> profile["Perfil"]
+    profile --> cards["Tarjetas virtuales"]
     profile --> admin{"Rol admin?"}
     admin -->|"Sí"| funding["Acreditar saldo"]
     profile --> logout["Cerrar sesión"]
@@ -269,9 +270,19 @@ erDiagram
         string description
         int sort_order
     }
+    PAYMENT_CARDS {
+        bigint id PK
+        bigint wallet_id FK
+        string nickname
+        string brand
+        string last_four
+        int expiry_month
+        int expiry_year
+        boolean is_default
+    }
 ```
 
-`wallet_balances` es la tabla puente entre billeteras y activos. Su clave primaria compuesta impide que una billetera tenga dos saldos separados para el mismo activo. `related_asset_id` solo se utiliza cuando una transacción relaciona dos activos, como un swap. `dapps` es un catálogo independiente y por ahora solo alimenta la pantalla Explorar.
+`wallet_balances` es la tabla puente entre billeteras y activos. Su clave primaria compuesta impide que una billetera tenga dos saldos separados para el mismo activo. `related_asset_id` solo se utiliza cuando una transacción relaciona dos activos, como un swap. `dapps` alimenta la pantalla Explorar. `payment_cards` contiene métodos completamente ficticios y nunca almacena un número completo, CVV ni información bancaria real.
 
 ## 9. Flujo de datos en la interfaz
 
@@ -282,6 +293,7 @@ Después del login o al restaurar una sesión, `App.tsx` solicita `GET /api/v1/b
 - activos con saldo y valor en USD;
 - últimas 30 transacciones;
 - catálogo de dApps.
+- tarjetas virtuales de la cuenta.
 
 Ese objeto `Bootstrap` se guarda en estado React y se entrega a las pantallas como propiedades. Después de enviar, comprar, intercambiar o acreditar, la app repite `bootstrap` para mostrar el estado confirmado por MySQL y no un cálculo optimista del teléfono.
 
@@ -299,6 +311,8 @@ Ese objeto `Bootstrap` se guarda en estado React y se entrega a las pantallas co
 | `GET` | `/api/v1/bootstrap` | Carga toda la vista principal |
 | `POST` | `/api/v1/transactions/send` | Transfiere entre dos cuentas Wallet |
 | `POST` | `/api/v1/transactions/buy` | Simula una compra y acredita saldo |
+| `POST` | `/api/v1/payment-cards` | Agrega una tarjeta virtual ficticia |
+| `PUT` | `/api/v1/payment-cards/:id/default` | Cambia la tarjeta virtual principal |
 | `POST` | `/api/v1/swap` | Convierte saldo entre activos internos |
 | `GET` | `/api/v1/admin/users` | Lista cuentas para administración |
 | `POST` | `/api/v1/admin/fund` | Acredita saldo como administrador |

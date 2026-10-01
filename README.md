@@ -2,7 +2,7 @@
 
 Aplicación móvil de demostración que reproduce el prototipo visual de Wallet. La primera entrega está orientada a Android y conserva compatibilidad con iOS mediante React Native/Expo.
 
-La API y la base de datos pueden ejecutarse localmente o publicarse en el VPS. El sistema incluye registro, login, sesiones, transferencias internas, compras, intercambios y un panel administrativo respaldado por MariaDB/MySQL.
+La API y la base de datos pueden ejecutarse localmente o publicarse en el VPS. El sistema incluye registro, login, sesiones, transferencias internas, tarjetas virtuales, compras, intercambios y un panel administrativo respaldado por MariaDB/MySQL. La interfaz Android incluye onboarding animado, estados vacíos, diálogos propios, formularios compatibles con teclado y un explorador visual con logos locales.
 
 ## Requisitos
 

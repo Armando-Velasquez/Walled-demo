@@ -30,8 +30,15 @@ function getTransporter() {
 }
 
 function emailLayout(title, intro, rows = [], footer = 'Si no reconoces esta actividad, cambia tu contraseña cuanto antes.') {
-  const details = rows.map(([label, value]) => `<tr><td style="padding:8px 12px;color:#939BAC">${escapeHtml(label)}</td><td style="padding:8px 12px;color:#F7F8FC;text-align:right">${escapeHtml(value)}</td></tr>`).join('');
-  return `<!doctype html><html><body style="margin:0;background:#070A12;font-family:Arial,sans-serif;color:#F7F8FC"><div style="max-width:560px;margin:0 auto;padding:32px 18px"><div style="background:linear-gradient(135deg,#696DFF,#49B8FF);border-radius:24px;padding:28px"><div style="font-size:14px;font-weight:700;letter-spacing:2px">WALLET</div><h1 style="font-size:26px;margin:16px 0 10px">${escapeHtml(title)}</h1><p style="margin:0;line-height:1.6">${escapeHtml(intro)}</p></div>${details ? `<table style="width:100%;margin-top:18px;background:#10151F;border:1px solid #252D3B;border-radius:18px;padding:10px">${details}</table>` : ''}<p style="color:#939BAC;font-size:13px;line-height:1.5;margin:22px 4px">${escapeHtml(footer)}</p></div></body></html>`;
+  const details = rows.map(([label, value]) => `<tr><td class="detail-label" style="padding:10px 12px;color:#667085">${escapeHtml(label)}</td><td class="detail-value" style="padding:10px 12px;color:#111827;text-align:right;font-weight:600">${escapeHtml(value)}</td></tr>`).join('');
+  return `<!doctype html>
+<html><head><meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">
+<style>
+  :root{color-scheme:light dark;supported-color-schemes:light dark}
+  body{margin:0;background:#F3F5FA;color:#111827;font-family:Arial,sans-serif}
+  .shell{max-width:560px;margin:0 auto;padding:32px 18px}.hero{background:#696DFF;background-image:linear-gradient(135deg,#8A5CFF,#536CFF 52%,#35BCEB);border-radius:24px;padding:28px;color:#FFF}.details{width:100%;margin-top:18px;background:#FFF;border:1px solid #E2E7F0;border-radius:18px;padding:10px;border-spacing:0}.footer{color:#667085;font-size:13px;line-height:1.55;margin:22px 4px}.badge{display:inline-block;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.16);font-size:12px;font-weight:700;letter-spacing:1.7px}
+  @media (prefers-color-scheme:dark){body{background:#070A12!important;color:#F7F8FC!important}.details{background:#10151F!important;border-color:#252D3B!important}.detail-label,.footer{color:#939BAC!important}.detail-value{color:#F7F8FC!important}}
+</style></head><body><div class="shell"><div class="hero"><div class="badge">WALLET • SEGURIDAD</div><h1 style="font-size:26px;margin:18px 0 10px">${escapeHtml(title)}</h1><p style="margin:0;line-height:1.6">${escapeHtml(intro)}</p></div>${details ? `<table role="presentation" class="details">${details}</table>` : ''}<p class="footer">${escapeHtml(footer)}<br><br>Este mensaje fue generado automáticamente; no respondas a este correo.</p></div></body></html>`;
 }
 
 export function createVerificationCode(userId) {

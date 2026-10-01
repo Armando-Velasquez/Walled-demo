@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { requireAuth, revokeSession } from './auth.js';
 import {
   createBuy,
+  createPaymentCard,
   createTransfer,
   createSwap,
   getAsset,
@@ -16,6 +17,7 @@ import {
   loginUser,
   registerUser,
   resendEmailVerification,
+  setDefaultPaymentCard,
   updateOnboarding,
   verifyEmail,
 } from './repository.js';
@@ -161,8 +163,30 @@ app.post('/api/v1/transactions/buy', asyncRoute(async (request, response) => {
   const usdAmount = requirePositiveNumber(request.body.usdAmount, 'El monto');
   if (usdAmount > 10000) return response.status(400).json({ message: 'El máximo por compra es $10,000' });
   const symbol = String(request.body.symbol || '').toUpperCase();
+  const cardId = requirePositiveNumber(request.body.cardId, 'La tarjeta');
   await processingDelay();
-  response.status(201).json(await createBuy({ walletId: request.auth.wallet_id, symbol, usdAmount }));
+  response.status(201).json(await createBuy({ walletId: request.auth.wallet_id, symbol, usdAmount, cardId }));
+}));
+
+app.post('/api/v1/payment-cards', asyncRoute(async (request, response) => {
+  const nickname = requireText(request.body.nickname, 'Alias', 2);
+  const holderName = requireText(request.body.holderName, 'Titular', 2);
+  const brand = String(request.body.brand || 'Visa');
+  const lastFour = String(request.body.lastFour || '');
+  const expiryMonth = Number(request.body.expiryMonth);
+  const expiryYear = Number(request.body.expiryYear);
+  const color = /^#[0-9A-F]{6}$/i.test(request.body.color) ? request.body.color : '#625EFF';
+  const currentYear = new Date().getFullYear();
+  if (!['Visa', 'Mastercard', 'Amex'].includes(brand)) return response.status(400).json({ message: 'Marca no válida' });
+  if (!/^\d{4}$/.test(lastFour)) return response.status(400).json({ message: 'Ingresa cuatro dígitos ficticios' });
+  if (!Number.isInteger(expiryMonth) || expiryMonth < 1 || expiryMonth > 12) return response.status(400).json({ message: 'Mes de expiración no válido' });
+  if (!Number.isInteger(expiryYear) || expiryYear < currentYear || expiryYear > currentYear + 15) return response.status(400).json({ message: 'Año de expiración no válido' });
+  response.status(201).json(await createPaymentCard({ walletId: request.auth.wallet_id, nickname, holderName, brand, lastFour, expiryMonth, expiryYear, color }));
+}));
+
+app.put('/api/v1/payment-cards/:id/default', asyncRoute(async (request, response) => {
+  const cardId = requirePositiveNumber(request.params.id, 'La tarjeta');
+  response.json(await setDefaultPaymentCard({ walletId: request.auth.wallet_id, cardId }));
 }));
 
 app.post('/api/v1/swap', asyncRoute(async (request, response) => {

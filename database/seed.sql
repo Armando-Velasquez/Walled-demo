@@ -33,6 +33,10 @@ INSERT INTO dapps (id, name, category, description, color, sort_order) VALUES
   (5, 'PancakeSwap', 'DeFi', 'Intercambio multicadena', '#D1884F', 5)
 ON DUPLICATE KEY UPDATE description = VALUES(description), color = VALUES(color), sort_order = VALUES(sort_order);
 
+INSERT INTO payment_cards (id, wallet_id, nickname, holder_name, brand, last_four, expiry_month, expiry_year, color, is_default)
+VALUES (1, 1, 'Principal', 'ADMINISTRADOR', 'Visa', '4242', 12, 2030, '#625EFF', TRUE)
+ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), holder_name = VALUES(holder_name), color = VALUES(color), is_default = TRUE;
+
 INSERT INTO transactions (wallet_id, asset_id, related_asset_id, type, status, amount, amount_usd, fee_usd, counterparty, created_at)
 SELECT 1, 1, NULL, 'receive', 'completed', 0.0042, 270.15, 0, 'bc1q...d8f2', NOW() - INTERVAL 2 HOUR
 WHERE NOT EXISTS (SELECT 1 FROM transactions WHERE wallet_id = 1);

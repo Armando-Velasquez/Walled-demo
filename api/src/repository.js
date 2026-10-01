@@ -141,7 +141,7 @@ export async function verifyEmail({ email, code }) {
 }
 
 export async function getBootstrap(walletId) {
-  const [[wallet], balanceRows, transactionRows, dappRows] = await Promise.all([
+  const [[wallet], balanceRows, transactionRows, dappRows, cardRows] = await Promise.all([
     pool.query(`SELECT w.id, w.name, w.address, w.onboarding_completed, u.display_name, u.email, u.role
       FROM wallets w JOIN users u ON u.id = w.user_id WHERE w.id = ?`, [walletId]),
     pool.query(`SELECT a.id, a.symbol, a.name, a.network, a.color, a.price_usd,
@@ -151,6 +151,8 @@ export async function getBootstrap(walletId) {
       t.counterparty, t.created_at, a.symbol, a.color FROM transactions t
       JOIN assets a ON a.id = t.asset_id WHERE t.wallet_id = ? ORDER BY t.created_at DESC LIMIT 30`, [walletId]),
     pool.query('SELECT id, name, category, description, color FROM dapps ORDER BY sort_order'),
+    pool.query(`SELECT id, nickname, holder_name, brand, last_four, expiry_month, expiry_year, color, is_default
+      FROM payment_cards WHERE wallet_id = ? ORDER BY is_default DESC, created_at DESC`, [walletId]),
   ]);
   if (!wallet[0]) throw Object.assign(new Error('Billetera no encontrada'), { status: 404 });
   const assets = balanceRows[0].map(mapAsset);
@@ -168,7 +170,42 @@ export async function getBootstrap(walletId) {
       counterparty: row.counterparty, createdAt: row.created_at,
     })),
     dapps: dappRows[0],
+    cards: cardRows[0].map((row) => ({
+      id: row.id,
+      nickname: row.nickname,
+      holderName: row.holder_name,
+      brand: row.brand,
+      lastFour: row.last_four,
+      expiryMonth: Number(row.expiry_month),
+      expiryYear: Number(row.expiry_year),
+      color: row.color,
+      isDefault: Boolean(row.is_default),
+    })),
   };
+}
+
+export async function createPaymentCard({ walletId, nickname, holderName, brand, lastFour, expiryMonth, expiryYear, color }) {
+  return withTransaction(async (connection) => {
+    const [existingCards] = await connection.query('SELECT id FROM payment_cards WHERE wallet_id = ? LIMIT 1 FOR UPDATE', [walletId]);
+    const isDefault = existingCards.length === 0;
+    const [result] = await connection.query(
+      `INSERT INTO payment_cards
+        (wallet_id, nickname, holder_name, brand, last_four, expiry_month, expiry_year, color, is_default)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [walletId, nickname, holderName, brand, lastFour, expiryMonth, expiryYear, color, isDefault ? 1 : 0],
+    );
+    return { id: result.insertId, isDefault };
+  });
+}
+
+export async function setDefaultPaymentCard({ walletId, cardId }) {
+  return withTransaction(async (connection) => {
+    const [cards] = await connection.query('SELECT id FROM payment_cards WHERE id = ? AND wallet_id = ? FOR UPDATE', [cardId, walletId]);
+    if (!cards.length) throw Object.assign(new Error('Tarjeta virtual no encontrada'), { status: 404 });
+    await connection.query('UPDATE payment_cards SET is_default = FALSE WHERE wallet_id = ?', [walletId]);
+    await connection.query('UPDATE payment_cards SET is_default = TRUE WHERE id = ?', [cardId]);
+    return { ok: true };
+  });
 }
 
 export async function getAsset(walletId, symbol) {
@@ -263,23 +300,30 @@ export async function createSwap({ walletId, fromSymbol, toSymbol, amount }) {
   });
 }
 
-export async function createBuy({ walletId, symbol, usdAmount }) {
+export async function createBuy({ walletId, symbol, usdAmount, cardId }) {
   return withTransaction(async (connection) => {
     const [rows] = await connection.query(`SELECT a.id, a.price_usd, u.email, u.display_name FROM wallet_balances b
       JOIN assets a ON a.id = b.asset_id JOIN wallets w ON w.id = b.wallet_id
       JOIN users u ON u.id = w.user_id WHERE b.wallet_id = ? AND a.symbol = ? FOR UPDATE`, [walletId, symbol]);
     const asset = rows[0];
     if (!asset) throw Object.assign(new Error('Activo no encontrado'), { status: 404 });
+    const [cards] = await connection.query(
+      'SELECT id, brand, last_four FROM payment_cards WHERE id = ? AND wallet_id = ? FOR UPDATE',
+      [cardId, walletId],
+    );
+    const card = cards[0];
+    if (!card) throw Object.assign(new Error('Selecciona una tarjeta virtual válida'), { status: 400 });
+    const cardLabel = `${card.brand} •••• ${card.last_four}`;
     const feeUsd = usdAmount * 0.0125;
     const received = (usdAmount - feeUsd) / asset.price_usd;
     await connection.query('UPDATE wallet_balances SET balance = balance + ? WHERE wallet_id = ? AND asset_id = ?', [received, walletId, asset.id]);
     const [result] = await connection.query(`INSERT INTO transactions
       (wallet_id, asset_id, type, status, amount, amount_usd, fee_usd, counterparty)
-      VALUES (?, ?, 'buy', 'completed', ?, ?, ?, 'Tarjeta **** 4242')`,
-    [walletId, asset.id, received, usdAmount, feeUsd]);
+      VALUES (?, ?, 'buy', 'completed', ?, ?, ?, ?)`,
+    [walletId, asset.id, received, usdAmount, feeUsd, cardLabel]);
     await queueMail(connection, transactionMessage({
       email: asset.email, displayName: asset.display_name, title: 'Compra completada', type: 'Compra simulada',
-      amount: received.toFixed(8), asset: symbol, valueUsd: usdAmount, counterparty: 'Tarjeta **** 4242', occurredAt: mailTimestamp(),
+      amount: received.toFixed(8), asset: symbol, valueUsd: usdAmount, counterparty: cardLabel, occurredAt: mailTimestamp(),
     }));
     return { id: result.insertId, status: 'completed', received, feeUsd };
   });

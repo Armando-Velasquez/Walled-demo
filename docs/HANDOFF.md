@@ -2,7 +2,7 @@
 
 ## Estado actual
 
-La entrega Android está funcional como entorno local. El diseño principal reproduce el prototipo de Wallet y ya cuenta con registro, login, sesión persistente, cierre de sesión, animaciones, transferencias internas y operaciones persistidas en MySQL/MariaDB. No hay conexiones financieras ni blockchain reales.
+La entrega Android está funcional como entorno local. El diseño principal reproduce el prototipo de Wallet y ya cuenta con registro, login, sesión persistente, cierre de sesión, onboarding animado/deslizable, diálogos propios, formularios adaptados al teclado, transferencias internas, tarjetas virtuales y operaciones persistidas en MySQL/MariaDB. No hay conexiones financieras ni blockchain reales.
 
 El APK local actualizado queda en `artifacts/Wallet-demo-android.apk`. El emulador usado es `Medium_Phone_API_36.1` y se comunica con la API del host mediante `http://10.0.2.2:4100`. Producción recompila la app contra HTTPS y publica el APK en `https://wallet-rest.armandovelasquez.com/downloads/wallet-android.apk`.
 
@@ -42,6 +42,7 @@ Las cuentas registradas desde la app comienzan con todos los activos en cero. La
 - `api/src/auth.js`: scrypt, creación/revocación de sesiones y middleware Bearer.
 - `api/src/repository.js`: consultas por wallet, transferencias internas y acreditaciones administrativas atómicas.
 - `database/schema.sql`: usuarios, wallets, balances, operaciones, sesiones y dApps.
+- `mobile/assets/dapps/`: logos locales mostrados en Explorar, sin dependencia de red.
 - `database/seed.sql`: cuenta y portafolio demo.
 
 ## Compilar Android
@@ -94,6 +95,7 @@ El mismo workflow compila `mobile/android` con `EXPO_PUBLIC_API_URL=https://wall
 - La app muestra `VerifyEmailScreen`; al confirmar el código recibe y guarda la primera sesión.
 - Un correo no confirmado no puede iniciar sesión. Se puede reenviar un código después de 60 segundos.
 - Login, envío, recepción, compra, swap y acreditación administrativa encolan avisos en `email_outbox`.
+- Las plantillas de correo incluyen estilos adaptativos para modo claro y oscuro.
 - `api/src/mailer.js` procesa la bandeja cada cinco segundos y reintenta hasta seis veces.
 - En local, `MAIL_MODE=console` imprime el correo y el código en la terminal. Producción usa Nodemailer con `MAIL_MODE=smtp` y `SMTP_PASS` como secreto de GitHub.
 - La migración se aplica con `npm run db:init`; en producción, `npm run db:init:production` la ejecuta automáticamente durante el deploy.

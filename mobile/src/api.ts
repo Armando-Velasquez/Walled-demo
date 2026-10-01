@@ -54,7 +54,8 @@ export async function restoreSession() {
 }
 
 export async function loadWallet(): Promise<Bootstrap> {
-  return request<Bootstrap>('/api/v1/bootstrap');
+  const wallet = await request<Bootstrap>('/api/v1/bootstrap');
+  return { ...wallet, cards: wallet.cards || [] };
 }
 
 export const walletApi = {
@@ -76,8 +77,12 @@ export const walletApi = {
     request('/api/v1/transactions/send', { method: 'POST', body: JSON.stringify(body) }),
   swap: (body: { fromSymbol: string; toSymbol: string; amount: number }) =>
     request<{ received: number; feeUsd: number }>('/api/v1/swap', { method: 'POST', body: JSON.stringify(body) }),
-  buy: (body: { symbol: string; usdAmount: number }) =>
+  buy: (body: { symbol: string; usdAmount: number; cardId: number }) =>
     request<{ received: number; feeUsd: number }>('/api/v1/transactions/buy', { method: 'POST', body: JSON.stringify(body) }),
+  addPaymentCard: (body: { nickname: string; holderName: string; brand: string; lastFour: string; expiryMonth: number; expiryYear: number; color: string }) =>
+    request<{ id: number; isDefault: boolean }>('/api/v1/payment-cards', { method: 'POST', body: JSON.stringify(body) }),
+  setDefaultPaymentCard: (cardId: number) =>
+    request<{ ok: true }>(`/api/v1/payment-cards/${cardId}/default`, { method: 'PUT' }),
   onboarding: (completed: boolean) =>
     request('/api/v1/onboarding', { method: 'PUT', body: JSON.stringify({ completed }) }),
   adminUsers: () => request<{ users: AdminUser[] }>('/api/v1/admin/users'),

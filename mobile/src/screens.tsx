@@ -1,14 +1,19 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
+  Animated,
+  Easing,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {
   BottomNav,
@@ -20,9 +25,10 @@ import {
   OutlineButton,
   Screen,
   commonStyles,
+  useWalletDialog,
 } from './components';
 import { colors, radii, shadow } from './theme';
-import type { AdminUser, AppScreen, Asset, Bootstrap, Dapp, Transaction } from './types';
+import type { AdminUser, AppScreen, Asset, Bootstrap, Dapp, PaymentCard, Transaction } from './types';
 
 const money = (value: number, decimals = 2) => `$${value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 const amountText = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 6 });
@@ -42,14 +48,24 @@ function AbstractBackdrop() {
 }
 
 export function SplashScreen({ next }: { next: () => void }) {
+  const reveal = useRef(new Animated.Value(0)).current;
+  const orbit = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(reveal, { toValue: 1, damping: 12, stiffness: 75, useNativeDriver: true }).start();
+    const loop = Animated.loop(Animated.timing(orbit, { toValue: 1, duration: 10000, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [orbit, reveal]);
   return (
     <Screen style={styles.splash}>
       <AbstractBackdrop />
-      <View style={styles.splashCenter}>
-        <LogoMark size={106} />
+      <Animated.View style={[styles.techRing, { transform: [{ rotate: orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}><View style={styles.techRingDot} /></Animated.View>
+      <Animated.View style={[styles.splashCenter, { opacity: reveal, transform: [{ scale: reveal }, { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
+        <View style={styles.logoHalo}><LogoMark size={106} /></View>
         <Text style={styles.brand}>Wallet</Text>
         <Text style={styles.tagline}>Tu mundo cripto,{`\n`}en una sola app.</Text>
-      </View>
+        <View style={styles.livePill}><View style={styles.liveDot} /><Text style={styles.liveText}>Protección inteligente activa</Text></View>
+      </Animated.View>
       <Pressable onPress={next} style={styles.startButton}>
         <Text style={styles.startText}>Comenzar</Text>
         <Ionicons name="arrow-forward" size={21} color={colors.text} />
@@ -80,42 +96,60 @@ const onboarding = [
 ];
 
 export function OnboardingScreen({ index, next }: { index: number; next: () => void }) {
-  const item = onboarding[index] ?? onboarding[0]!;
+  const { width } = useWindowDimensions();
+  const pageWidth = width - 44;
+  const scrollRef = useRef<ScrollView>(null);
+  const [active, setActive] = useState(index);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActive((current) => {
+        const target = (current + 1) % onboarding.length;
+        scrollRef.current?.scrollTo({ x: target * pageWidth, animated: true });
+        return target;
+      });
+    }, 4200);
+    return () => clearInterval(timer);
+  }, [pageWidth]);
+  const finishScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => setActive(Math.round(event.nativeEvent.contentOffset.x / pageWidth));
   return (
     <Screen>
-      <View style={styles.onboardingArt}>
-        <View style={[styles.orbit, { borderColor: `${item.accent}55` }]} />
-        <LinearGradient colors={[item.accent, '#121936']} style={styles.artCoin}>
-          <Ionicons name={item.icon} size={74} color="#E9EBFF" />
-        </LinearGradient>
-        <View style={[styles.miniCoin, { left: 28, top: 120, backgroundColor: '#F7931A' }]}><Text style={styles.miniCoinText}>₿</Text></View>
-        <View style={[styles.miniCoin, { right: 25, top: 85, backgroundColor: '#627EEA' }]}><Text style={styles.miniCoinText}>◆</Text></View>
-      </View>
-      <View style={styles.onboardingCopy}>
-        <Text style={commonStyles.title}>{item.title}</Text>
-        <Text style={[commonStyles.subtitle, { marginTop: 14 }]}>{item.body}</Text>
-      </View>
+      <ScrollView ref={scrollRef} style={styles.onboardingPager} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onMomentumScrollEnd={finishScroll} scrollEventThrottle={16}>
+        {onboarding.map((item, page) => <View key={item.title} style={{ width: pageWidth }}>
+          <View style={styles.onboardingArt}>
+            <View style={[styles.orbit, { borderColor: `${item.accent}55` }]}><View style={[styles.orbitNode, { backgroundColor: item.accent }]} /></View>
+            <LinearGradient colors={[item.accent, '#121936']} style={[styles.artCoin, page === active && styles.artCoinActive]}>
+              <Ionicons name={item.icon} size={74} color="#E9EBFF" />
+            </LinearGradient>
+            <View style={[styles.miniCoin, { left: 28, top: 120, backgroundColor: '#F7931A' }]}><Text style={styles.miniCoinText}>₿</Text></View>
+            <View style={[styles.miniCoin, { right: 25, top: 85, backgroundColor: '#627EEA' }]}><Text style={styles.miniCoinText}>◆</Text></View>
+          </View>
+          <View style={styles.onboardingCopy}><Text style={commonStyles.title}>{item.title}</Text><Text style={[commonStyles.subtitle, { marginTop: 14 }]}>{item.body}</Text></View>
+        </View>)}
+      </ScrollView>
       <View style={styles.onboardingBottom}>
-        <View style={styles.dots}>{onboarding.map((_, dot) => <View key={dot} style={[styles.dot, dot === index && styles.dotActive]} />)}</View>
-        <Pressable onPress={next} style={styles.nextSquare}><Ionicons name="arrow-forward" size={27} color="#FFF" /></Pressable>
+        <View style={styles.dots}>{onboarding.map((_, dot) => <Pressable key={dot} onPress={() => { setActive(dot); scrollRef.current?.scrollTo({ x: dot * pageWidth, animated: true }); }} style={[styles.dot, dot === active && styles.dotActive]} />)}</View>
+        <Pressable onPress={() => { if (active < onboarding.length - 1) { const target = active + 1; setActive(target); scrollRef.current?.scrollTo({ x: target * pageWidth, animated: true }); } else next(); }} style={styles.nextSquare}><Ionicons name={active === onboarding.length - 1 ? 'checkmark' : 'arrow-forward'} size={27} color="#FFF" /></Pressable>
       </View>
     </Screen>
   );
 }
 
 export function WelcomeScreen({ navigate }: { navigate: Navigate }) {
+  const { showDialog, dialog } = useWalletDialog();
   return (
     <Screen style={styles.welcome}>
+      <AbstractBackdrop />
       <View style={styles.welcomeTop}>
-        <LogoMark size={106} />
+        <View style={styles.welcomeOrb}><View style={styles.welcomeOrbInner}><LogoMark size={96} /></View></View>
         <Text style={[commonStyles.title, { textAlign: 'center', marginTop: 28 }]}>Bienvenido a Wallet</Text>
         <Text style={[commonStyles.subtitle, { textAlign: 'center', marginTop: 10 }]}>Crea una cuenta para guardar tu billetera o inicia sesión para continuar.</Text>
       </View>
       <View style={styles.welcomeActions}>
         <GradientButton label="Crear cuenta" onPress={() => navigate('register')} />
         <OutlineButton label="Iniciar sesión" onPress={() => navigate('login')} />
-        <OutlineButton label="Importar billetera" onPress={() => Alert.alert('Próximamente', 'La importación estará disponible en una próxima versión.')} />
+        <OutlineButton label="Importar billetera" onPress={() => showDialog({ title: 'Importación protegida', message: 'Esta función se habilitará cuando se conecte el módulo seguro de claves.', tone: 'info' })} />
       </View>
+      {dialog}
     </Screen>
   );
 }
@@ -131,40 +165,48 @@ export function AuthScreen({
 }) {
   const isLogin = mode === 'login';
   const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState(isLogin ? 'demo@wallet.local' : '');
-  const [password, setPassword] = useState(isLogin ? 'Demo1234!' : '');
+  const [email, setEmail] = useState(isLogin && __DEV__ ? 'demo@wallet.local' : '');
+  const [password, setPassword] = useState(isLogin && __DEV__ ? 'Demo1234!' : '');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  const { showDialog, dialog } = useWalletDialog();
+  const passwordChecks = [
+    { label: '8 caracteres', ok: password.length >= 8 },
+    { label: 'Una mayúscula', ok: /[A-Z]/.test(password) },
+    { label: 'Un número', ok: /\d/.test(password) },
+    { label: 'Un símbolo', ok: /[^A-Za-z0-9]/.test(password) },
+  ];
   const run = async () => {
     try {
       setBusy(true);
-      const result = await submit({ displayName, email, password, pin });
-      Alert.alert(
-        result === 'verification' ? 'Revisa tu correo' : 'Sesión iniciada',
-        result === 'verification' ? 'Enviamos un código de 6 dígitos para confirmar tu cuenta.' : 'Bienvenido de nuevo.',
-      );
+      await submit({ displayName, email, password, pin });
     } catch (error) {
-      Alert.alert(isLogin ? 'No se pudo iniciar sesión' : 'No se pudo crear la cuenta', error instanceof Error ? error.message : 'Intenta nuevamente');
+      showDialog({ title: isLogin ? 'No se pudo iniciar sesión' : 'No se pudo crear la cuenta', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' });
     } finally { setBusy(false); }
   };
-  const disabled = busy || !email.trim() || !password || (!isLogin && (!displayName.trim() || !/^\d{6}$/.test(pin)));
+  const emailValid = /^\S+@\S+\.\S+$/.test(email.trim());
+  const passwordStrong = passwordChecks.every((check) => check.ok);
+  const disabled = busy || !emailValid || !password || (!isLogin && (!displayName.trim() || !passwordStrong || !/^\d{6}$/.test(pin)));
   return (
     <Screen scroll>
       <Header title="" onBack={() => navigate('welcome')} />
       <View style={styles.authLogo}><LogoMark size={72} /></View>
       <Text style={[commonStyles.title, { textAlign: 'center' }]}>{isLogin ? 'Iniciar sesión' : 'Crear tu cuenta'}</Text>
-      <Text style={[commonStyles.subtitle, styles.authSubtitle]}>{isLogin ? 'Accede a tu portafolio guardado en la base local.' : 'Tus datos y movimientos se guardarán en MySQL local.'}</Text>
+      <Text style={[commonStyles.subtitle, styles.authSubtitle]}>{isLogin ? 'Accede de forma segura a tu portafolio.' : 'Crea tu perfil y protege el acceso a tu wallet.'}</Text>
       <View style={styles.authForm}>
         {!isLogin ? <><Text style={commonStyles.label}>Nombre</Text><TextInput value={displayName} onChangeText={setDisplayName} style={commonStyles.input} placeholder="Tu nombre" placeholderTextColor={colors.muted} /></> : null}
         <Text style={commonStyles.label}>Correo</Text>
         <TextInput value={email} onChangeText={setEmail} style={commonStyles.input} placeholder="correo@ejemplo.com" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" />
         <Text style={commonStyles.label}>Contraseña</Text>
-        <TextInput value={password} onChangeText={setPassword} style={commonStyles.input} placeholder="Mínimo 8 caracteres" placeholderTextColor={colors.muted} secureTextEntry />
+        <View style={styles.passwordField}><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Mínimo 8 caracteres" placeholderTextColor={colors.muted} secureTextEntry={!passwordVisible} autoCapitalize="none" /><Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={23} color="#9892FF" /></Pressable></View>
+        {!isLogin && password.length ? <View style={styles.passwordChecks}>{passwordChecks.map((check) => <View key={check.label} style={styles.passwordCheck}><Ionicons name={check.ok ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={check.ok ? colors.success : colors.muted} /><Text style={[styles.passwordCheckText, check.ok && { color: colors.success }]}>{check.label}</Text></View>)}</View> : null}
         {!isLogin ? <><Text style={commonStyles.label}>PIN de 6 dígitos</Text><TextInput value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))} style={commonStyles.input} placeholder="••••••" placeholderTextColor={colors.muted} secureTextEntry keyboardType="number-pad" /></> : null}
         <GradientButton label={busy ? (isLogin ? 'Verificando...' : 'Creando wallet...') : (isLogin ? 'Entrar' : 'Registrarme')} disabled={disabled} onPress={() => void run()} />
       </View>
-      {isLogin ? <Text style={styles.demoCredentials}>Acceso administrador: demo@wallet.local · Demo1234!</Text> : null}
+      {isLogin && __DEV__ ? <Text style={styles.demoCredentials}>Credenciales locales cargadas en modo desarrollo</Text> : null}
       <Pressable onPress={() => navigate(isLogin ? 'register' : 'login')}><Text style={styles.link}>{isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}</Text></Pressable>
+      {dialog}
     </Screen>
   );
 }
@@ -183,22 +225,22 @@ export function VerifyEmailScreen({
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [resending, setResending] = useState(false);
+  const { showDialog, dialog } = useWalletDialog();
   const verify = async () => {
     try {
       setBusy(true);
       await submit(code);
-      Alert.alert('Correo confirmado', 'Tu cuenta Wallet ya está activa.');
     } catch (error) {
-      Alert.alert('No se pudo verificar', error instanceof Error ? error.message : 'Intenta nuevamente');
+      showDialog({ title: 'No se pudo verificar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' });
     } finally { setBusy(false); }
   };
   const resendCode = async () => {
     try {
       setResending(true);
       await resend();
-      Alert.alert('Código enviado', 'Revisa tu bandeja de entrada y la carpeta de spam.');
+      showDialog({ title: 'Código enviado', message: 'Revisa tu bandeja de entrada y la carpeta de spam.', tone: 'success' });
     } catch (error) {
-      Alert.alert('No se pudo reenviar', error instanceof Error ? error.message : 'Intenta nuevamente');
+      showDialog({ title: 'No se pudo reenviar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' });
     } finally { setResending(false); }
   };
   return (
@@ -221,6 +263,7 @@ export function VerifyEmailScreen({
         <GradientButton label={busy ? 'Verificando...' : 'Confirmar correo'} disabled={busy || code.length !== 6} onPress={() => void verify()} />
         <OutlineButton label={resending ? 'Enviando...' : 'Reenviar código'} onPress={() => { if (!resending) void resendCode(); }} />
       </View>
+      {dialog}
     </Screen>
   );
 }
@@ -364,14 +407,15 @@ export function SendScreen({ asset, navigate, submit }: { asset: Asset; navigate
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('0.01');
   const [busy, setBusy] = useState(false);
+  const { showDialog, dialog } = useWalletDialog();
   const value = Number(amount || 0);
   const send = async () => {
-    try { setBusy(true); await submit(value, recipient); Alert.alert('Transferencia completada', 'El saldo ya está disponible en la cuenta de destino.'); navigate('activity'); }
-    catch (error) { Alert.alert('No se pudo enviar', error instanceof Error ? error.message : 'Intenta nuevamente'); }
+    try { setBusy(true); await submit(value, recipient); showDialog({ title: 'Transferencia completada', message: 'El saldo ya está disponible en la cuenta de destino.', tone: 'success', confirmLabel: 'Ver actividad', onConfirm: () => navigate('activity') }); }
+    catch (error) { showDialog({ title: 'No se pudo enviar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
     finally { setBusy(false); }
   };
   return (
-    <Screen>
+    <Screen scroll>
       <Header title={`Enviar ${asset.symbol}`} onBack={() => navigate('home')} />
       <Text style={commonStyles.label}>Destinatario</Text>
       <View style={styles.inputRow}><TextInput value={recipient} onChangeText={setRecipient} style={[commonStyles.input, styles.flex]} placeholder="Correo o dirección Wallet" autoCapitalize="none" placeholderTextColor={colors.muted} /><Ionicons name="person-outline" size={23} color="#8885FF" style={styles.inputIcon} /></View>
@@ -381,6 +425,7 @@ export function SendScreen({ asset, navigate, submit }: { asset: Asset; navigate
       <Card><View style={commonStyles.row}><TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={styles.amountInput} /><Pressable onPress={() => setAmount(String(Math.max(0, asset.balance - 0.00001)))} style={styles.max}><Text style={styles.maxText}>Máx</Text></Pressable></View><Text style={styles.amountUsd}>≈ {money(value * asset.priceUsd)}</Text></Card>
       <View style={styles.feeBox}><Text style={styles.infoLabel}>Transferencia interna</Text><Text style={styles.feeText}>Sin comisión</Text></View>
       <View style={styles.bottomAction}><GradientButton label={busy ? 'Procesando transferencia...' : 'Transferir'} disabled={busy || !value || recipient.length < 5} onPress={send} /></View>
+      {dialog}
     </Screen>
   );
 }
@@ -391,15 +436,17 @@ function QrPattern() {
 }
 
 export function ReceiveScreen({ asset, walletAddress, navigate }: { asset: Asset; walletAddress: string; navigate: Navigate }) {
+  const { showDialog, dialog } = useWalletDialog();
   return (
     <Screen>
       <Header title={`Recibir ${asset.symbol}`} onBack={() => navigate('home')} />
       <Card style={styles.receiveCard}>
         <QrPattern />
         <View style={styles.addressBox}><Text numberOfLines={1} style={styles.addressText}>{walletAddress}</Text><Ionicons name="copy-outline" size={22} color="#9290FF" /></View>
-        <OutlineButton label="Compartir" onPress={() => Alert.alert('Dirección copiada', walletAddress)} />
+        <OutlineButton label="Mostrar dirección" onPress={() => showDialog({ title: 'Dirección Wallet', message: walletAddress, tone: 'success' })} />
       </Card>
       <Text style={[commonStyles.subtitle, { textAlign: 'center', marginTop: 24 }]}>Comparte tu correo o esta dirección para recibir una transferencia de otra cuenta Wallet.</Text>
+      {dialog}
     </Screen>
   );
 }
@@ -409,6 +456,7 @@ export function SwapScreen({ assets, navigate, submit }: { assets: Asset[]; navi
   const [toIndex, setToIndex] = useState(3);
   const [amount, setAmount] = useState('0.5');
   const [busy, setBusy] = useState(false);
+  const { showDialog, dialog } = useWalletDialog();
   const from = assets[fromIndex] ?? assets[0]!;
   const to = assets[toIndex] ?? assets[1]!;
   const numeric = Number(amount || 0);
@@ -420,7 +468,7 @@ export function SwapScreen({ assets, navigate, submit }: { assets: Asset[]; navi
   };
   return (
     <View style={styles.mainShell}>
-      <Screen>
+      <Screen scroll>
         <Header title="Intercambiar" onBack={() => navigate('home')} right={<Ionicons name="receipt-outline" size={22} color={colors.text} />} />
         <Card style={styles.swapCard}>
           <Text style={commonStyles.label}>Desde</Text>
@@ -435,25 +483,42 @@ export function SwapScreen({ assets, navigate, submit }: { assets: Asset[]; navi
         </Card>
         <Text style={styles.rate}>1 {from.symbol} ≈ {amountText(from.priceUsd / to.priceUsd)} {to.symbol}</Text>
         <View style={styles.feeLine}><Text style={styles.infoLabel}>Comisión estimada</Text><Text style={styles.infoValue}>{money(numeric * from.priceUsd * 0.0015)}</Text></View>
-        <View style={styles.bottomAction}><GradientButton label={busy ? 'Intercambiando...' : 'Intercambiar'} disabled={busy || !numeric} onPress={async () => { try { setBusy(true); const result = await submit(from, to, numeric); Alert.alert('Intercambio completado', `Recibiste ${amountText(result)} ${to.symbol}`); navigate('home'); } catch (error) { Alert.alert('No se pudo intercambiar', error instanceof Error ? error.message : 'Intenta nuevamente'); } finally { setBusy(false); } }} /></View>
+        <View style={styles.bottomAction}><GradientButton label={busy ? 'Intercambiando...' : 'Intercambiar'} disabled={busy || !numeric} onPress={async () => { try { setBusy(true); const result = await submit(from, to, numeric); showDialog({ title: 'Intercambio completado', message: `Recibiste ${amountText(result)} ${to.symbol}`, tone: 'success', onConfirm: () => navigate('home') }); } catch (error) { showDialog({ title: 'No se pudo intercambiar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusy(false); } }} /></View>
+        {dialog}
       </Screen>
       <BottomNav active="swap" navigate={navigate} />
     </View>
   );
 }
 
-function DappRow({ dapp }: { dapp: Dapp }) {
-  return <Pressable onPress={() => Alert.alert(dapp.name, 'La conexión con este servicio estará disponible próximamente.')} style={styles.dappRow}><View style={[styles.dappIcon, { backgroundColor: dapp.color }]}><Text style={styles.dappLetter}>{dapp.name[0]}</Text></View><View style={styles.flex}><Text style={styles.assetTitle}>{dapp.name}</Text><Text style={styles.dappDescription}>{dapp.description}</Text><Text style={styles.dappCategory}>{dapp.category}</Text></View><Ionicons name="chevron-forward" size={24} color={colors.muted} /></Pressable>;
+const dappIcons: Record<string, keyof typeof Ionicons.glyphMap> = { Uniswap: 'swap-horizontal', Aave: 'water', Lido: 'layers', OpenSea: 'images', PancakeSwap: 'git-compare' };
+const dappMetrics: Record<string, string> = { Uniswap: '$4.8B TVL', Aave: '3.9% APY', Lido: '3.1% APR', OpenSea: '12.4K activos', PancakeSwap: '$1.6B TVL' };
+const dappImages: Record<string, number> = {
+  Uniswap: require('../assets/dapps/uniswap.png'),
+  Aave: require('../assets/dapps/aave.png'),
+  Lido: require('../assets/dapps/lido.jpg'),
+  OpenSea: require('../assets/dapps/opensea.png'),
+  PancakeSwap: require('../assets/dapps/pancakeswap.png'),
+};
+
+function DappRow({ dapp, onPress }: { dapp: Dapp; onPress: () => void }) {
+  return <Pressable onPress={onPress} style={({ pressed }) => [styles.dappRow, pressed && styles.rowPressed]}><LinearGradient colors={['#FFFFFF', '#E9ECF6']} style={styles.dappIcon}>{dappImages[dapp.name] ? <Image source={dappImages[dapp.name]} style={styles.dappImage} resizeMode="contain" /> : <Ionicons name={dappIcons[dapp.name] || 'apps'} size={25} color={dapp.color} />}</LinearGradient><View style={styles.flex}><Text style={styles.assetTitle}>{dapp.name}</Text><Text style={styles.dappDescription}>{dapp.description}</Text><Text style={styles.dappCategory}>{dapp.category} · {dappMetrics[dapp.name] || 'Mercado activo'}</Text></View><Ionicons name="chevron-forward" size={22} color={colors.muted} /></Pressable>;
 }
 
 export function ExploreScreen({ dapps, navigate }: { dapps: Dapp[]; navigate: Navigate }) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('Todo');
+  const { showDialog, dialog } = useWalletDialog();
+  const filtered = dapps.filter((dapp) => (category === 'Todo' || dapp.category === category) && `${dapp.name} ${dapp.description}`.toLowerCase().includes(query.toLowerCase()));
   return (
     <View style={styles.mainShell}>
       <Screen>
         <View style={styles.pageTitleRow}><Text style={commonStyles.title}>Explorar</Text><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></View>
-        <View style={styles.search}><Ionicons name="search" color={colors.muted} size={20} /><Text style={styles.searchText}>Buscar dApps, tokens, redes...</Text></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['Todo', 'DeFi', 'NFT', 'Gaming', 'Bridge'].map((chip, index) => <View key={chip} style={[styles.chip, index === 0 && styles.chipActive]}><Text style={[styles.chipText, index === 0 && { color: '#FFF' }]}>{chip}</Text></View>)}</ScrollView>
-        <ScrollView showsVerticalScrollIndicator={false}>{dapps.map((dapp) => <DappRow key={dapp.id} dapp={dapp} />)}</ScrollView>
+        <View style={styles.search}><Ionicons name="search" color={colors.muted} size={20} /><TextInput value={query} onChangeText={setQuery} style={styles.searchInput} placeholder="Buscar protocolos y mercados..." placeholderTextColor={colors.muted} /></View>
+        <LinearGradient colors={['#262B70', '#172A50', '#0E1B2D']} style={styles.marketHero}><View><Text style={styles.marketEyebrow}>MERCADO SIMULADO</Text><Text style={styles.marketTitle}>Oportunidades Web3</Text><Text style={styles.marketCopy}>Protocolos, rendimientos y tendencias en un solo lugar.</Text></View><View style={styles.marketOrb}><Ionicons name="analytics" size={31} color="#74E8FF" /></View></LinearGradient>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['Todo', 'DeFi', 'NFT', 'Gaming', 'Bridge'].map((chip) => <Pressable key={chip} onPress={() => setCategory(chip)} style={[styles.chip, chip === category && styles.chipActive]}><Text style={[styles.chipText, chip === category && { color: '#FFF' }]}>{chip}</Text></Pressable>)}</ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false}>{filtered.length ? filtered.map((dapp) => <DappRow key={dapp.id} dapp={dapp} onPress={() => showDialog({ title: dapp.name, message: `${dapp.description}. Los datos mostrados son simulados; la conexión financiera se habilitará en una etapa posterior.`, tone: 'info' })} />) : <View style={styles.emptyCompact}><Ionicons name="search-outline" size={30} color="#7772FF" /><Text style={styles.emptyTitle}>Sin resultados</Text><Text style={styles.emptyBody}>Prueba otra búsqueda o categoría.</Text></View>}</ScrollView>
+        {dialog}
       </Screen>
       <BottomNav active="explore" navigate={navigate} />
     </View>
@@ -467,7 +532,7 @@ export function ActivityScreen({ transactions, navigate }: { transactions: Trans
     <View style={styles.mainShell}>
       <Screen>
         <Text style={[commonStyles.title, { marginTop: 20, marginBottom: 18 }]}>Actividad</Text>
-        <ScrollView>{transactions.map((transaction) => { const incoming = transaction.type === 'receive' || transaction.type === 'buy'; return <Card key={transaction.id} style={styles.transaction}><View style={[styles.transactionIcon, { backgroundColor: `${transaction.color}30` }]}><Ionicons name={icons[transaction.type]} color={transaction.color} size={23} /></View><View style={styles.flex}><Text style={styles.assetTitle}>{labels[transaction.type]} · {transaction.symbol}</Text><Text style={styles.assetSymbol}>{new Date(transaction.createdAt).toLocaleDateString('es-EC')} · {transaction.status === 'completed' ? 'Completada' : transaction.status}</Text></View><View style={styles.assetValue}><Text style={[styles.assetTitle, { color: incoming ? colors.success : colors.text }]}>{incoming ? '+' : '-'}{amountText(transaction.amount)}</Text><Text style={styles.assetSymbol}>{money(transaction.amountUsd)}</Text></View></Card>; })}</ScrollView>
+        <ScrollView contentContainerStyle={!transactions.length ? styles.emptyActivityScroll : undefined}>{transactions.length ? transactions.map((transaction) => { const incoming = transaction.type === 'receive' || transaction.type === 'buy'; return <Card key={transaction.id} style={styles.transaction}><View style={[styles.transactionIcon, { backgroundColor: `${transaction.color}30` }]}><Ionicons name={icons[transaction.type]} color={transaction.color} size={23} /></View><View style={styles.flex}><Text style={styles.assetTitle}>{labels[transaction.type]} · {transaction.symbol}</Text><Text style={styles.assetSymbol}>{new Date(transaction.createdAt).toLocaleDateString('es-EC')} · {transaction.status === 'completed' ? 'Completada' : transaction.status}</Text></View><View style={styles.assetValue}><Text style={[styles.assetTitle, { color: incoming ? colors.success : colors.text }]}>{incoming ? '+' : '-'}{amountText(transaction.amount)}</Text><Text style={styles.assetSymbol}>{money(transaction.amountUsd)}</Text></View></Card>; }) : <View style={styles.emptyState}><LinearGradient colors={['#242864', '#171D35']} style={styles.emptyIcon}><Ionicons name="pulse-outline" size={38} color="#8D8AFF" /></LinearGradient><Text style={styles.emptyTitle}>Aún no hay movimientos</Text><Text style={styles.emptyBody}>Tus envíos, compras e intercambios aparecerán aquí cuando realices tu primera operación.</Text><GradientButton label="Explorar la wallet" onPress={() => navigate('home')} /></View>}</ScrollView>
       </Screen>
       <BottomNav active="activity" navigate={navigate} />
     </View>
@@ -475,8 +540,9 @@ export function ActivityScreen({ transactions, navigate }: { transactions: Trans
 }
 
 export function ProfileScreen({ data, navigate, logout }: { data: Bootstrap; navigate: Navigate; logout: () => Promise<void> }) {
+  const { showDialog, dialog } = useWalletDialog();
   const groups = [
-    [{ icon: 'shield-checkmark-outline' as const, title: 'Seguridad' }, { icon: 'cloud-upload-outline' as const, title: 'Backups' }, { icon: 'globe-outline' as const, title: 'Redes', sub: 'Ethereum, Solana, BSC...' }, { icon: 'settings-outline' as const, title: 'Preferencias', sub: 'Fiat, tema, idioma...' }],
+    [{ icon: 'card-outline' as const, title: 'Tarjetas virtuales', sub: `${data.cards.length} agregada${data.cards.length === 1 ? '' : 's'}`, screen: 'cards' as AppScreen }, { icon: 'shield-checkmark-outline' as const, title: 'Seguridad' }, { icon: 'cloud-upload-outline' as const, title: 'Backups' }, { icon: 'globe-outline' as const, title: 'Redes', sub: 'Ethereum, Solana, BSC...' }, { icon: 'settings-outline' as const, title: 'Preferencias', sub: 'Fiat, tema, idioma...' }],
     [{ icon: 'help-circle-outline' as const, title: 'Ayuda y soporte' }, { icon: 'information-circle-outline' as const, title: 'Acerca de' }],
   ];
   return (
@@ -484,8 +550,9 @@ export function ProfileScreen({ data, navigate, logout }: { data: Bootstrap; nav
       <Screen scroll>
         <View style={styles.profileHero}><View style={styles.avatar}><Ionicons name="person-outline" size={40} color="#FFF" /></View><View style={styles.flex}><Text style={styles.profileName}>{data.user.displayName}</Text><Text style={styles.profileAddress}>{data.user.email}</Text><Text style={styles.profileAddress}>{data.wallet.address.slice(0, 8)}...{data.wallet.address.slice(-4)}</Text></View><Ionicons name="copy-outline" size={21} color={colors.muted} /><Ionicons name="wallet-outline" size={23} color={colors.text} /></View>
         {data.user.role === 'admin' ? <Pressable onPress={() => navigate('admin')}><Card style={styles.adminEntry}><View style={styles.adminIcon}><Ionicons name="people" size={25} color="#FFF" /></View><View style={styles.flex}><Text style={styles.settingTitle}>Administrar cuentas</Text><Text style={styles.settingSub}>Consultar usuarios y acreditar saldos</Text></View><Ionicons name="chevron-forward" size={23} color={colors.muted} /></Card></Pressable> : null}
-        {groups.map((group, groupIndex) => <Card key={groupIndex} style={styles.profileGroup}>{group.map((item, index) => <Pressable key={item.title} onPress={() => Alert.alert(item.title, 'Esta opción estará disponible próximamente.')} style={[styles.settingRow, index < group.length - 1 && styles.settingBorder]}><Ionicons name={item.icon} size={26} color={colors.text} /><View style={styles.flex}><Text style={styles.settingTitle}>{item.title}</Text>{'sub' in item && item.sub ? <Text style={styles.settingSub}>{item.sub}</Text> : null}</View><Ionicons name="chevron-forward" size={23} color={colors.muted} /></Pressable>)}</Card>)}
+        {groups.map((group, groupIndex) => <Card key={groupIndex} style={styles.profileGroup}>{group.map((item, index) => <Pressable key={item.title} onPress={() => 'screen' in item && item.screen ? navigate(item.screen) : showDialog({ title: item.title, message: 'Esta sección está preparada para una siguiente integración.', tone: 'info' })} style={[styles.settingRow, index < group.length - 1 && styles.settingBorder]}><Ionicons name={item.icon} size={26} color={colors.text} /><View style={styles.flex}><Text style={styles.settingTitle}>{item.title}</Text>{'sub' in item && item.sub ? <Text style={styles.settingSub}>{item.sub}</Text> : null}</View><Ionicons name="chevron-forward" size={23} color={colors.muted} /></Pressable>)}</Card>)}
         <OutlineButton label="Cerrar sesión" onPress={() => void logout()} />
+        {dialog}
       </Screen>
       <BottomNav active="profile" navigate={navigate} />
     </View>
@@ -509,11 +576,12 @@ export function AdminScreen({
   const [amount, setAmount] = useState('100');
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const { showDialog, dialog } = useWalletDialog();
   const targets = users.filter((user) => user.role !== 'admin');
   const target = targets[selectedUser] ?? targets[0];
   const asset = assets[selectedAsset] ?? assets[0]!;
   const reload = async () => {
-    try { setUsers(await loadUsers()); } catch (error) { Alert.alert('No se pudieron cargar las cuentas', error instanceof Error ? error.message : 'Intenta nuevamente'); }
+    try { setUsers(await loadUsers()); } catch (error) { showDialog({ title: 'No se pudieron cargar las cuentas', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
     finally { setLoading(false); }
   };
   useEffect(() => { void reload(); }, []);
@@ -539,27 +607,84 @@ export function AdminScreen({
           <Text style={[commonStyles.label, { marginTop: 20 }]}>Cantidad de {asset.symbol}</Text>
           <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={commonStyles.input} placeholder="0.00" placeholderTextColor={colors.muted} />
           <View style={styles.adminPreview}><Text style={styles.infoLabel}>Valor estimado</Text><Text style={styles.infoValue}>{money(Number(amount || 0) * asset.priceUsd)}</Text></View>
-          <View style={styles.bottomAction}><GradientButton label={busy ? 'Acreditando saldo...' : 'Acreditar saldo'} disabled={busy || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusy(true); const name = await submit(target.id, asset.symbol, Number(amount)); Alert.alert('Saldo acreditado', `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`); await reload(); } catch (error) { Alert.alert('No se pudo acreditar', error instanceof Error ? error.message : 'Intenta nuevamente'); } finally { setBusy(false); } }} /></View>
+          <View style={styles.bottomAction}><GradientButton label={busy ? 'Acreditando saldo...' : 'Acreditar saldo'} disabled={busy || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusy(true); const name = await submit(target.id, asset.symbol, Number(amount)); showDialog({ title: 'Saldo acreditado', message: `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`, tone: 'success' }); await reload(); } catch (error) { showDialog({ title: 'No se pudo acreditar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusy(false); } }} /></View>
         </>
       )}
+      {dialog}
     </Screen>
   );
 }
 
-export function BuyScreen({ assets, navigate, submit }: { assets: Asset[]; navigate: Navigate; submit: (asset: Asset, usdAmount: number) => Promise<number> }) {
+function VirtualCard({ card, compact = false }: { card: PaymentCard; compact?: boolean }) {
+  return <LinearGradient colors={[card.color, '#25285E', '#11172A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.virtualCard, compact && styles.virtualCardCompact]}>
+    <View style={commonStyles.row}><Text style={styles.cardBrand}>{card.brand}</Text>{card.isDefault ? <View style={styles.defaultBadge}><Text style={styles.defaultBadgeText}>PRINCIPAL</Text></View> : null}</View>
+    <Ionicons name="radio-outline" size={28} color="rgba(255,255,255,.75)" />
+    <Text style={styles.cardNumber}>••••  ••••  ••••  {card.lastFour}</Text>
+    <View style={styles.cardBottom}><View><Text style={styles.cardMeta}>TITULAR</Text><Text style={styles.cardValue}>{card.holderName.toUpperCase()}</Text></View><View><Text style={styles.cardMeta}>VENCE</Text><Text style={styles.cardValue}>{String(card.expiryMonth).padStart(2, '0')}/{String(card.expiryYear).slice(-2)}</Text></View></View>
+  </LinearGradient>;
+}
+
+export function CardsScreen({ data, navigate, addCard, setDefault }: { data: Bootstrap; navigate: Navigate; addCard: (card: Omit<PaymentCard, 'id' | 'isDefault'>) => Promise<void>; setDefault: (cardId: number) => Promise<void> }) {
+  const [adding, setAdding] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [nickname, setNickname] = useState('Personal');
+  const [holderName, setHolderName] = useState(data.user.displayName);
+  const [brand, setBrand] = useState<PaymentCard['brand']>('Visa');
+  const [lastFour, setLastFour] = useState(() => String(Math.floor(1000 + Math.random() * 9000)));
+  const [month, setMonth] = useState('12');
+  const [year, setYear] = useState(String(new Date().getFullYear() + 4));
+  const { showDialog, dialog } = useWalletDialog();
+  const colorsByBrand = { Visa: '#4659E8', Mastercard: '#D75A32', Amex: '#1487A8' };
+  const save = async () => {
+    try {
+      setBusy(true);
+      await addCard({ nickname, holderName, brand, lastFour, expiryMonth: Number(month), expiryYear: Number(year), color: colorsByBrand[brand] });
+      setAdding(false);
+      setLastFour(String(Math.floor(1000 + Math.random() * 9000)));
+      showDialog({ title: 'Tarjeta virtual agregada', message: 'Ya puedes seleccionarla como método en tus compras simuladas.', tone: 'success' });
+    } catch (error) { showDialog({ title: 'No se pudo agregar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+  return <Screen scroll>
+    <Header title="Tarjetas virtuales" onBack={() => navigate('profile')} right={<Ionicons name="shield-checkmark" size={22} color="#8D8AFF" />} />
+    <Text style={commonStyles.title}>Métodos de pago</Text>
+    <Text style={[commonStyles.subtitle, { marginTop: 7, marginBottom: 18 }]}>Tarjetas ficticias para probar compras y movimientos sin realizar cargos reales.</Text>
+    {data.cards.map((card) => <Pressable key={card.id} onPress={async () => { if (!card.isDefault) { try { await setDefault(card.id); showDialog({ title: 'Tarjeta principal actualizada', message: `${card.brand} terminada en ${card.lastFour} se usará por defecto.`, tone: 'success' }); } catch (error) { showDialog({ title: 'No se pudo actualizar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } } }} style={styles.cardStack}><VirtualCard card={card} /></Pressable>)}
+    {!data.cards.length ? <View style={styles.emptyCompact}><Ionicons name="card-outline" size={34} color="#8883FF" /><Text style={styles.emptyTitle}>No tienes tarjetas virtuales</Text><Text style={styles.emptyBody}>Agrega una para habilitar las compras simuladas.</Text></View> : null}
+    {adding ? <Card style={styles.cardForm}>
+      <Text style={commonStyles.sectionTitle}>Nueva tarjeta ficticia</Text>
+      <Text style={commonStyles.label}>Marca</Text><View style={styles.brandRow}>{(['Visa', 'Mastercard', 'Amex'] as const).map((item) => <Pressable key={item} onPress={() => setBrand(item)} style={[styles.brandChip, brand === item && styles.brandChipActive]}><Text style={styles.brandChipText}>{item}</Text></Pressable>)}</View>
+      <Text style={commonStyles.label}>Alias</Text><TextInput value={nickname} onChangeText={setNickname} style={commonStyles.input} placeholder="Personal" placeholderTextColor={colors.muted} />
+      <Text style={commonStyles.label}>Titular</Text><TextInput value={holderName} onChangeText={setHolderName} style={commonStyles.input} placeholder="Nombre" placeholderTextColor={colors.muted} />
+      <Text style={commonStyles.label}>Últimos 4 ficticios</Text><TextInput value={lastFour} onChangeText={(value) => setLastFour(value.replace(/\D/g, '').slice(0, 4))} style={commonStyles.input} keyboardType="number-pad" />
+      <View style={styles.expiryRow}><View style={styles.flex}><Text style={commonStyles.label}>Mes</Text><TextInput value={month} onChangeText={(value) => setMonth(value.replace(/\D/g, '').slice(0, 2))} style={commonStyles.input} keyboardType="number-pad" /></View><View style={styles.flex}><Text style={commonStyles.label}>Año</Text><TextInput value={year} onChangeText={(value) => setYear(value.replace(/\D/g, '').slice(0, 4))} style={commonStyles.input} keyboardType="number-pad" /></View></View>
+      <GradientButton label={busy ? 'Guardando...' : 'Agregar tarjeta'} disabled={busy || nickname.length < 2 || holderName.length < 2 || lastFour.length !== 4} onPress={() => void save()} />
+      <OutlineButton label="Cancelar" onPress={() => setAdding(false)} />
+    </Card> : <GradientButton label="Agregar tarjeta virtual" icon="add" onPress={() => setAdding(true)} />}
+    {dialog}
+  </Screen>;
+}
+
+export function BuyScreen({ assets, cards, navigate, submit }: { assets: Asset[]; cards: PaymentCard[]; navigate: Navigate; submit: (asset: Asset, usdAmount: number, cardId: number) => Promise<number> }) {
   const [amount, setAmount] = useState('250');
   const [busy, setBusy] = useState(false);
+  const [cardIndex, setCardIndex] = useState(Math.max(0, cards.findIndex((card) => card.isDefault)));
+  const { showDialog, dialog } = useWalletDialog();
   const asset = assets[0]!;
+  const card = cards[cardIndex] ?? cards[0];
   const crypto = Number(amount || 0) / asset.priceUsd;
   return (
-    <Screen>
+    <Screen scroll>
       <Header title="Comprar cripto" onBack={() => navigate('home')} />
       <Text style={[commonStyles.subtitle, { marginBottom: 22 }]}>Selecciona el monto que deseas acreditar a tu portafolio.</Text>
       <Card><Text style={commonStyles.label}>Pagas</Text><View style={commonStyles.row}><Text style={styles.buyCurrency}>USD</Text><TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={styles.buyAmount} /></View></Card>
       <View style={styles.buyArrow}><Ionicons name="arrow-down" color="#FFF" size={24} /></View>
       <Card><Text style={commonStyles.label}>Recibes</Text><View style={commonStyles.row}><CoinIcon asset={asset} /><Text style={styles.buyCurrency}>{asset.symbol}</Text><Text style={styles.buyAmount}>{amountText(crypto)}</Text></View></Card>
+      <Text style={[commonStyles.label, { marginTop: 20 }]}>Método virtual</Text>
+      {card ? <Pressable onPress={() => setCardIndex((cardIndex + 1) % cards.length)}><VirtualCard card={card} compact /></Pressable> : <Pressable onPress={() => navigate('cards')}><Card style={styles.noCard}><Ionicons name="add-circle-outline" size={28} color="#918AFF" /><View style={styles.flex}><Text style={styles.assetTitle}>Agregar tarjeta virtual</Text><Text style={styles.assetSymbol}>Necesaria para continuar</Text></View><Ionicons name="chevron-forward" size={22} color={colors.muted} /></Card></Pressable>}
       <Card style={styles.buyNotice}><Ionicons name="shield-checkmark" size={24} color="#9E91FF" /><Text style={styles.buyNoticeText}>Revisa el monto antes de confirmar la operación.</Text></Card>
-      <View style={styles.bottomAction}><GradientButton label={busy ? 'Procesando compra...' : 'Confirmar compra'} disabled={busy || Number(amount) <= 0} onPress={async () => { try { setBusy(true); const received = await submit(asset, Number(amount)); Alert.alert('Compra completada', `Recibiste ${amountText(received)} ${asset.symbol}.`); navigate('activity'); } catch (error) { Alert.alert('No se pudo comprar', error instanceof Error ? error.message : 'Intenta nuevamente'); } finally { setBusy(false); } }} /></View>
+      <View style={styles.bottomAction}><GradientButton label={busy ? 'Procesando compra...' : 'Confirmar compra'} disabled={busy || Number(amount) <= 0 || !card} onPress={async () => { if (!card) return; try { setBusy(true); const received = await submit(asset, Number(amount), card.id); showDialog({ title: 'Compra completada', message: `Recibiste ${amountText(received)} ${asset.symbol}.`, tone: 'success', confirmLabel: 'Ver actividad', onConfirm: () => navigate('activity') }); } catch (error) { showDialog({ title: 'No se pudo comprar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusy(false); } }} /></View>
+      {dialog}
     </Screen>
   );
 }
@@ -570,18 +695,27 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   splash: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 96, paddingBottom: 48, overflow: 'hidden' },
   splashCenter: { alignItems: 'center', zIndex: 2, marginTop: 70 },
+  techRing: { position: 'absolute', top: 142, width: 245, height: 245, borderRadius: 123, borderWidth: 1, borderColor: 'rgba(106,119,255,.4)' },
+  techRingDot: { position: 'absolute', top: -5, left: 112, width: 10, height: 10, borderRadius: 5, backgroundColor: '#72E5FF', shadowColor: '#72E5FF', shadowOpacity: 1, shadowRadius: 12 },
+  logoHalo: { padding: 22, borderRadius: 52, backgroundColor: 'rgba(96,89,255,.08)', borderWidth: 1, borderColor: 'rgba(119,111,255,.18)' },
   brand: { color: '#FFF', fontSize: 48, fontWeight: '900', letterSpacing: -1.7, marginTop: 22 },
   tagline: { color: '#E2E4EE', fontSize: 19, lineHeight: 28, textAlign: 'center', marginTop: 24 },
   startButton: { zIndex: 2, minWidth: 210, minHeight: 64, borderRadius: 32, borderWidth: 1, borderColor: '#7D74FF', backgroundColor: '#16162E', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, ...shadow },
   startText: { color: '#FFF', fontSize: 17, fontWeight: '700' },
+  livePill: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, backgroundColor: 'rgba(13,22,38,.75)', borderWidth: 1, borderColor: '#28334A' },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
+  liveText: { color: '#AAB4C8', fontSize: 12, fontWeight: '600' },
   glow: { position: 'absolute', width: 260, height: 260, borderRadius: 130, opacity: 0.33, backgroundColor: '#703DFF' },
   glowTop: { left: -130, top: 40 },
   glowBottom: { right: -100, bottom: -20, backgroundColor: '#5235FF' },
   diagonalOne: { position: 'absolute', width: 520, height: 90, backgroundColor: '#111737', transform: [{ rotate: '38deg' }], left: -180, top: 230, opacity: 0.8 },
   diagonalTwo: { position: 'absolute', width: 520, height: 100, backgroundColor: '#151344', transform: [{ rotate: '38deg' }], left: -80, bottom: 80, opacity: 0.75 },
-  onboardingArt: { flex: 1.1, alignItems: 'center', justifyContent: 'center' },
+  onboardingPager: { flex: 1 },
+  onboardingArt: { flex: 1.1, minHeight: 360, alignItems: 'center', justifyContent: 'center' },
   orbit: { position: 'absolute', width: 270, height: 270, borderRadius: 135, borderWidth: 1 },
+  orbitNode: { position: 'absolute', width: 12, height: 12, borderRadius: 6, top: 18, right: 38, shadowColor: '#7A70FF', shadowOpacity: 1, shadowRadius: 12 },
   artCoin: { width: 175, height: 175, borderRadius: 88, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], ...shadow },
+  artCoinActive: { borderWidth: 1, borderColor: 'rgba(255,255,255,.18)' },
   miniCoin: { position: 'absolute', width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', opacity: 0.9 },
   miniCoinText: { color: '#FFF', fontSize: 30, fontWeight: '900' },
   onboardingCopy: { minHeight: 190, justifyContent: 'center' },
@@ -591,11 +725,18 @@ const styles = StyleSheet.create({
   dotActive: { backgroundColor: '#766DFF', width: 11, height: 11 },
   nextSquare: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6179FF', ...shadow },
   welcome: { justifyContent: 'space-between', paddingTop: 100, paddingBottom: 55 },
-  welcomeTop: { alignItems: 'center' },
-  welcomeActions: { gap: 16 },
+  welcomeTop: { alignItems: 'center', zIndex: 2 },
+  welcomeOrb: { width: 180, height: 180, borderRadius: 90, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(117,107,255,.32)', backgroundColor: 'rgba(71,67,177,.08)' },
+  welcomeOrbInner: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(79,207,255,.18)' },
+  welcomeActions: { gap: 16, zIndex: 2 },
   authLogo: { alignItems: 'center', marginTop: 10, marginBottom: 20 },
   authSubtitle: { textAlign: 'center', marginTop: 10, marginBottom: 26 },
   authForm: { gap: 12 },
+  passwordField: { minHeight: 62, borderRadius: radii.medium, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  passwordInput: { flex: 1, color: colors.text, fontSize: 17, paddingRight: 12 },
+  passwordChecks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
+  passwordCheck: { flexDirection: 'row', alignItems: 'center', gap: 5, width: '47%' },
+  passwordCheckText: { color: colors.muted, fontSize: 12 },
   demoCredentials: { color: colors.success, textAlign: 'center', fontSize: 12, marginTop: 18 },
   link: { color: '#A99AFF', textAlign: 'center', fontSize: 16, textDecorationLine: 'underline', marginTop: 8 },
   setupList: { gap: 12 },
@@ -618,21 +759,21 @@ const styles = StyleSheet.create({
   keypad: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 14, marginTop: 5 },
   key: { width: '28%', aspectRatio: 1.55, maxHeight: 68, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   keyText: { color: colors.text, fontSize: 24, fontWeight: '600' },
-  homeHeader: { height: 55, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  homeHeader: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerIcons: { flexDirection: 'row', gap: 20, alignItems: 'center' },
   offline: { flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#2A2214', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
   offlineText: { color: colors.warning, fontSize: 11 },
-  balance: { color: colors.text, fontSize: 38, fontWeight: '800', letterSpacing: -1.2, marginTop: 9 },
-  gain: { color: colors.success, fontSize: 14, fontWeight: '700', marginTop: 5 },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, marginBottom: 21 },
-  quickAction: { width: '23%', alignItems: 'center', gap: 8 },
-  quickIcon: { width: 56, height: 51, borderRadius: 17, alignItems: 'center', justifyContent: 'center', ...shadow },
-  quickLabel: { color: colors.text, fontSize: 12.5, fontWeight: '600' },
-  assetTabs: { height: 43, flexDirection: 'row', gap: 34, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' },
+  balance: { color: colors.text, fontSize: 34, fontWeight: '800', letterSpacing: -1.2, marginTop: 5 },
+  gain: { color: colors.success, fontSize: 13, fontWeight: '700', marginTop: 3 },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, marginBottom: 13 },
+  quickAction: { width: '23%', alignItems: 'center', gap: 6 },
+  quickIcon: { width: 50, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', ...shadow },
+  quickLabel: { color: colors.text, fontSize: 11.5, fontWeight: '600' },
+  assetTabs: { height: 38, flexDirection: 'row', gap: 34, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' },
   assetTab: { color: colors.muted, fontSize: 15 },
-  assetTabActive: { color: colors.text, fontSize: 15, fontWeight: '700', borderBottomWidth: 2, borderBottomColor: '#7A6FFF', height: 43, textAlignVertical: 'center' },
+  assetTabActive: { color: colors.text, fontSize: 15, fontWeight: '700', borderBottomWidth: 2, borderBottomColor: '#7A6FFF', height: 38, textAlignVertical: 'center' },
   assetList: { flex: 1 },
-  assetRow: { minHeight: 72, borderBottomWidth: 1, borderBottomColor: '#1B2230', flexDirection: 'row', alignItems: 'center', gap: 13 },
+  assetRow: { minHeight: 63, borderBottomWidth: 1, borderBottomColor: '#1B2230', flexDirection: 'row', alignItems: 'center', gap: 12 },
   assetName: { flex: 1 },
   assetValue: { alignItems: 'flex-end' },
   assetTitle: { color: colors.text, fontSize: 15.5, fontWeight: '700' },
@@ -676,17 +817,31 @@ const styles = StyleSheet.create({
   pageTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20 },
   search: { height: 52, borderRadius: 17, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, marginTop: 18 },
   searchText: { color: colors.muted, fontSize: 15 },
+  searchInput: { color: colors.text, fontSize: 15, flex: 1, paddingVertical: 0 },
+  marketHero: { minHeight: 132, borderRadius: 24, marginTop: 16, padding: 19, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' },
+  marketEyebrow: { color: '#7DEBFF', fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
+  marketTitle: { color: '#FFF', fontSize: 21, fontWeight: '800', marginTop: 7 },
+  marketCopy: { color: '#BBC5D8', fontSize: 12.5, lineHeight: 18, width: 225, marginTop: 5 },
+  marketOrb: { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(75,214,255,.12)', borderWidth: 1, borderColor: 'rgba(102,225,255,.3)', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
   chips: { gap: 9, paddingVertical: 16 },
   chip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 18, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   chipActive: { backgroundColor: '#6672FF', borderColor: '#6672FF' },
   chipText: { color: colors.muted, fontWeight: '600' },
   dappRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  rowPressed: { opacity: 0.65, transform: [{ scale: 0.99 }] },
   dappIcon: { width: 51, height: 51, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  dappImage: { width: 36, height: 36, borderRadius: 8 },
   dappLetter: { color: '#FFF', fontSize: 26, fontWeight: '900' },
   dappDescription: { color: colors.muted, fontSize: 13, marginTop: 3 },
   dappCategory: { color: '#7772FF', fontSize: 12, marginTop: 2 },
   transaction: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   transactionIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  emptyActivityScroll: { flexGrow: 1, justifyContent: 'center', paddingBottom: 30 },
+  emptyState: { alignItems: 'center', paddingHorizontal: 12 },
+  emptyIcon: { width: 82, height: 82, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  emptyTitle: { color: colors.text, fontSize: 19, fontWeight: '800', textAlign: 'center', marginTop: 8 },
+  emptyBody: { color: colors.muted, fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 7, marginBottom: 20 },
+  emptyCompact: { alignItems: 'center', justifyContent: 'center', padding: 28, borderRadius: 22, borderWidth: 1, borderStyle: 'dashed', borderColor: '#343B50', backgroundColor: 'rgba(18,24,36,.55)' },
   profileHero: { minHeight: 118, flexDirection: 'row', alignItems: 'center', gap: 13 },
   avatar: { width: 72, height: 72, borderRadius: 36, borderWidth: 1, borderColor: '#4B5364', backgroundColor: '#202838', alignItems: 'center', justifyContent: 'center' },
   profileName: { color: colors.text, fontSize: 21, fontWeight: '800' },
@@ -706,4 +861,21 @@ const styles = StyleSheet.create({
   buyArrow: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#5F6FFF', alignItems: 'center', justifyContent: 'center', alignSelf: 'center', marginVertical: 14 },
   buyNotice: { flexDirection: 'row', alignItems: 'center', gap: 13, marginTop: 22 },
   buyNoticeText: { color: colors.muted, flex: 1, lineHeight: 20 },
+  virtualCard: { minHeight: 205, borderRadius: 26, padding: 21, justifyContent: 'space-between', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,.16)', ...shadow },
+  virtualCardCompact: { minHeight: 165, padding: 17 },
+  cardBrand: { color: '#FFF', fontSize: 21, fontWeight: '900', fontStyle: 'italic' },
+  defaultBadge: { marginLeft: 'auto', backgroundColor: 'rgba(255,255,255,.17)', paddingHorizontal: 9, paddingVertical: 5, borderRadius: 12 },
+  defaultBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  cardNumber: { color: '#FFF', fontSize: 19, fontWeight: '700', letterSpacing: 1.8 },
+  cardBottom: { flexDirection: 'row', justifyContent: 'space-between' },
+  cardMeta: { color: 'rgba(255,255,255,.62)', fontSize: 8, fontWeight: '700', letterSpacing: 1.2 },
+  cardValue: { color: '#FFF', fontSize: 12, fontWeight: '700', marginTop: 4 },
+  cardStack: { marginBottom: 16 },
+  cardForm: { gap: 11, marginVertical: 18 },
+  brandRow: { flexDirection: 'row', gap: 8 },
+  brandChip: { flex: 1, minHeight: 43, borderRadius: 14, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
+  brandChipActive: { borderColor: '#7D74FF', backgroundColor: '#272653' },
+  brandChipText: { color: colors.text, fontWeight: '700', fontSize: 12 },
+  expiryRow: { flexDirection: 'row', gap: 12 },
+  noCard: { flexDirection: 'row', alignItems: 'center', gap: 13 },
 });
