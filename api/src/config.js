@@ -1,7 +1,9 @@
 import 'dotenv/config';
 
+const defaultPort = process.env.NODE_ENV === 'production' ? 3100 : 4100;
+
 export const config = {
-  port: Number(process.env.PORT || 4100),
+  port: Number(process.env.PORT || defaultPort),
   db: {
     host: process.env.DB_HOST || '127.0.0.1',
     port: Number(process.env.DB_PORT || 3306),

@@ -1,6 +1,15 @@
 # Deploy de Wallet REST
 
-El workflow `.github/workflows/backend.yml` publica la API en el VPS siguiendo el patrón de los demás proyectos: GitHub Actions, SSH, systemd y Nginx. El dominio configurado es `wallet-rest.armandovelasquez.com` y la API escucha internamente en el puerto `4100`.
+El workflow `.github/workflows/backend.yml` publica la API en el VPS siguiendo el patrón de los demás proyectos: GitHub Actions, SSH, systemd y Nginx. El dominio configurado es `wallet-rest.armandovelasquez.com`; la API escucha por defecto en el puerto interno `3100`.
+
+La instalación privada queda organizada así:
+
+```text
+/var/www/PRIVATE/WALLET/
+├── backend/   Código de la API, dependencias y .env
+├── database/  Esquema SQL usado por el inicializador
+└── logs/      Salida estándar y errores de systemd
+```
 
 ## Configuración de GitHub
 
@@ -8,6 +17,7 @@ Crea un environment llamado `production` y agrega:
 
 Variables:
 
+- `PORT`: opcional; usa `3100` cuando no está definida
 - `DB_HOST`: normalmente `127.0.0.1`
 - `DB_PORT`: normalmente `3306`
 - `DB_NAME`: por ejemplo `wallet_prod`
@@ -52,6 +62,7 @@ sudo certbot --nginx -d wallet-rest.armandovelasquez.com
 ```
 
 Los deploys posteriores conservan el archivo de Nginx para no eliminar la configuración HTTPS creada por Certbot.
+El proxy lee el puerto desde `/etc/nginx/snippets/wallet-rest-upstream.conf`, que se actualiza en cada deploy según la variable `PORT`.
 
 ## Operación
 

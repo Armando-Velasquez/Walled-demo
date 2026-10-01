@@ -84,7 +84,7 @@ Copiar el resultado desde `mobile/android/app/build/outputs/apk/release/app-rele
 
 ## Deploy de la API
 
-El backend se despliega mediante `.github/workflows/backend.yml` en `wallet-rest.armandovelasquez.com`, con systemd y Nginx. La configuración requerida y los pasos de DNS, MySQL y Certbot están documentados en `docs/DEPLOY.md`. El flujo de producción usa `npm run db:init:production`: no carga el usuario demo ni movimientos iniciales y conserva los saldos existentes.
+El backend se despliega mediante `.github/workflows/backend.yml` en `wallet-rest.armandovelasquez.com`, con systemd y Nginx. La API vive directamente en `/var/www/PRIVATE/WALLET/backend` —incluidos `src`, `scripts`, `package.json` y `.env`— y usa el puerto `3100` por defecto; `PORT` puede cambiarlo desde GitHub Actions. La configuración requerida y los pasos de DNS, MySQL y Certbot están documentados en `docs/DEPLOY.md`. El flujo de producción usa `npm run db:init:production`: no carga el usuario demo ni movimientos iniciales y conserva los saldos existentes.
 
 ## Correos y verificación de cuentas
 

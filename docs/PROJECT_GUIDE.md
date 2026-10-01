@@ -39,7 +39,7 @@ flowchart LR
     repository -->|"Consultas y transacciones"| mysql
 ```
 
-En desarrollo, la app se conecta directamente a `http://10.0.2.2:4100` desde el emulador Android. En producción usa `https://wallet-rest.armandovelasquez.com`, Nginx recibe HTTPS y reenvía la petición a Express en el puerto local `4100`.
+En desarrollo, la app se conecta directamente a `http://10.0.2.2:4100` desde el emulador Android. En producción usa `https://wallet-rest.armandovelasquez.com`, Nginx recibe HTTPS y reenvía la petición a Express en el puerto privado `3100` por defecto, o al valor configurado en `PORT`.
 
 ## 3. Directorios principales
 
