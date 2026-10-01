@@ -32,9 +32,13 @@ Esta cuenta tiene rol `admin`. Desde **Perfil → Administrar cuentas** puede ac
 
 ## APK de demostración
 
-El APK instalable se genera en `artifacts/Wallet-demo-android.apk`. Está firmado para pruebas locales y no debe publicarse en Google Play como compilación de producción.
+El APK instalable local se genera en `artifacts/Wallet-demo-android.apk`. La última versión desplegada se descarga directamente desde:
 
-Para que un teléfono físico persista operaciones en MySQL, la API debe estar ejecutándose en la PC y la app debe compilarse con `EXPO_PUBLIC_API_URL=http://IP_DE_LA_PC:4100`. Sin API disponible, la interfaz continúa con datos de demostración, pero las operaciones nuevas no se guardan.
+https://wallet-rest.armandovelasquez.com/downloads/wallet-android.apk
+
+GitHub Actions recompila Android con la URL HTTPS de producción y publica el APK junto al backend en cada deploy. Está firmado para instalación directa de pruebas y no debe publicarse en Google Play como compilación de producción.
+
+La versión del enlace usa `EXPO_PUBLIC_API_URL=https://wallet-rest.armandovelasquez.com`, por lo que un teléfono físico persiste sus operaciones en la base de producción.
 
 ## Deploy del backend
 

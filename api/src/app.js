@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { requireAuth, revokeSession } from './auth.js';
 import {
   createBuy,
@@ -21,6 +24,16 @@ export const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '32kb' }));
+
+const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
+const packagedApkPath = path.resolve(sourceDirectory, '../public/downloads/Wallet-Android.apk');
+const localApkPath = path.resolve(sourceDirectory, '../../artifacts/Wallet-demo-android.apk');
+
+function getAvailableApkPath() {
+  if (fs.existsSync(packagedApkPath)) return packagedApkPath;
+  if (fs.existsSync(localApkPath)) return localApkPath;
+  return null;
+}
 
 const asyncRoute = (handler) => (request, response, next) =>
   Promise.resolve(handler(request, response)).catch(next);
@@ -49,6 +62,27 @@ function requireAdmin(request, response, next) {
 app.get('/health', asyncRoute(async (_request, response) => {
   response.json({ ok: true, service: 'wallet-demo-api', database: 'connected' });
 }));
+
+app.get('/', (_request, response) => {
+  response.json({
+    ok: true,
+    service: 'Wallet REST API',
+    health: '/health',
+    androidApk: '/downloads/wallet-android.apk',
+  });
+});
+
+app.get('/downloads/wallet-android.apk', (request, response, next) => {
+  const apkPath = getAvailableApkPath();
+  if (!apkPath) {
+    return response.status(404).json({ message: 'El APK todavía no está disponible' });
+  }
+
+  response.setHeader('Cache-Control', 'no-cache');
+  return response.download(apkPath, 'Wallet-Android.apk', (error) => {
+    if (error && !response.headersSent) next(error);
+  });
+});
 
 app.post('/api/v1/auth/register', asyncRoute(async (request, response) => {
   const displayName = requireText(request.body.displayName, 'Nombre', 2);

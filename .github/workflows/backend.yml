@@ -18,7 +18,10 @@ on:
   push:
     paths:
       - "api/**"
+      - "mobile/**"
       - "database/**"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/backend.yml"
     branches:
       - main # Rama de despliegue
@@ -38,22 +41,43 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: api/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            api/package-lock.json
 
-      # La API no necesita compilarse: se valida en el runner antes de copiarla.
-      - name: Check backend
-        working-directory: api
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # Instala los workspaces y valida backend y aplicación móvil.
+      - name: Check project
         run: |
           npm ci
           npm run check
+
+      # El APK queda conectado a la API HTTPS de producción. Se compila en
+      # cada deploy para que el enlace público siempre sirva la versión actual.
+      - name: Build Android APK
+        working-directory: mobile/android
+        env:
+          NODE_ENV: production
+          EXPO_PUBLIC_API_URL: https://wallet-rest.armandovelasquez.com
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+          test -f app/build/outputs/apk/release/app-release.apk
 
       # En el VPS la API queda directamente en:
       # /var/www/PRIVATE/WALLET/backend
       - name: Package release
         run: |
-          mkdir -p release/backend release/database
+          mkdir -p release/backend/public/downloads release/database
           cp -R api/src api/scripts release/backend/
           cp api/package.json api/package-lock.json release/backend/
+          cp mobile/android/app/build/outputs/apk/release/app-release.apk release/backend/public/downloads/Wallet-Android.apk
           cp database/schema.sql database/production-seed.sql release/database/
           tar -czf wallet-backend.tar.gz -C release backend database
 
@@ -217,8 +241,9 @@ jobs:
           fi
 
           for attempt in 1 2 3 4 5; do
-            if curl --fail --silent "http://127.0.0.1:${APP_PORT}/health" >/dev/null; then
-              echo "Wallet REST API se ha iniciado correctamente."
+            if curl --fail --silent "http://127.0.0.1:${APP_PORT}/health" >/dev/null && \
+               curl --fail --silent --head "http://127.0.0.1:${APP_PORT}/downloads/wallet-android.apk" >/dev/null; then
+              echo "Wallet REST API y APK de Android disponibles correctamente."
               exit 0
             fi
             sleep 3

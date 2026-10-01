@@ -6,14 +6,14 @@ La instalación privada queda organizada así:
 
 ```text
 /var/www/PRIVATE/WALLET/
-├── backend/   Código de la API, dependencias y .env
+├── backend/   Código de la API, APK, dependencias y .env
 ├── database/  Esquema SQL usado por el inicializador
 └── logs/      Salida estándar y errores de systemd
 ```
 
 ## Configuración de GitHub
 
-Crea un environment llamado `production` y agrega:
+Configura estas variables y secretos en el repositorio de GitHub (Settings → Secrets and variables → Actions):
 
 Variables:
 
@@ -72,10 +72,18 @@ sudo journalctl -u wallet-rest.service -f
 curl https://wallet-rest.armandovelasquez.com/health
 ```
 
-El deploy se ejecuta al hacer push a `main` cuando cambia el backend, la base de datos o el propio workflow. También se puede iniciar manualmente desde GitHub Actions.
+El deploy se ejecuta al hacer push a `main` cuando cambia el backend, la aplicación móvil, la base de datos, las dependencias raíz o el propio workflow. También se puede iniciar manualmente desde GitHub Actions.
 
-Para que una compilación Android use producción, compílala definiendo:
+El runner compila Android automáticamente definiendo:
 
 ```text
 EXPO_PUBLIC_API_URL=https://wallet-rest.armandovelasquez.com
 ```
+
+El APK se instala en `/var/www/PRIVATE/WALLET/backend/public/downloads/Wallet-Android.apk` y queda disponible públicamente en:
+
+```text
+https://wallet-rest.armandovelasquez.com/downloads/wallet-android.apk
+```
+
+La ruta raíz del dominio devuelve un pequeño índice JSON con los enlaces de salud y descarga.

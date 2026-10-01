@@ -4,7 +4,7 @@
 
 La entrega Android está funcional como entorno local. El diseño principal reproduce el prototipo de Wallet y ya cuenta con registro, login, sesión persistente, cierre de sesión, animaciones, transferencias internas y operaciones persistidas en MySQL/MariaDB. No hay conexiones financieras ni blockchain reales.
 
-El APK actualizado queda en `artifacts/Wallet-demo-android.apk`. El emulador usado es `Medium_Phone_API_36.1` y se comunica con la API del host mediante `http://10.0.2.2:4100`.
+El APK local actualizado queda en `artifacts/Wallet-demo-android.apk`. El emulador usado es `Medium_Phone_API_36.1` y se comunica con la API del host mediante `http://10.0.2.2:4100`. Producción recompila la app contra HTTPS y publica el APK en `https://wallet-rest.armandovelasquez.com/downloads/wallet-android.apk`.
 
 ## Arranque rápido
 
@@ -85,6 +85,8 @@ Copiar el resultado desde `mobile/android/app/build/outputs/apk/release/app-rele
 ## Deploy de la API
 
 El backend se despliega mediante `.github/workflows/backend.yml` en `wallet-rest.armandovelasquez.com`, con systemd y Nginx. La API vive directamente en `/var/www/PRIVATE/WALLET/backend` —incluidos `src`, `scripts`, `package.json` y `.env`— y usa el puerto `3100` por defecto; `PORT` puede cambiarlo desde GitHub Actions. La configuración requerida y los pasos de DNS, MySQL y Certbot están documentados en `docs/DEPLOY.md`. El flujo de producción usa `npm run db:init:production`: no carga el usuario demo ni movimientos iniciales y conserva los saldos existentes.
+
+El mismo workflow compila `mobile/android` con `EXPO_PUBLIC_API_URL=https://wallet-rest.armandovelasquez.com`, copia el resultado a `backend/public/downloads/Wallet-Android.apk` y lo expone mediante la ruta pública `/downloads/wallet-android.apk`. La ruta está declarada antes del middleware de autenticación, por lo que no requiere iniciar sesión.
 
 ## Correos y verificación de cuentas
 
