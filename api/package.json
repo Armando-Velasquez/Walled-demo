@@ -1,0 +1,22 @@
+{
+  "name": "wallet-demo-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/app.js && node --check src/repository.js && node --check src/mailer.js && node --check scripts/init-production-db.js",
+    "db:init": "node scripts/init-db.js",
+    "db:init:production": "node scripts/init-production-db.js",
+    "db:reset": "node scripts/init-db.js --reset"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "mysql2": "^3.24.5",
+    "nodemailer": "^10.0.13"
+  }
+}

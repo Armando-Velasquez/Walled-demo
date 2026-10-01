@@ -1,0 +1,9 @@
+node_modules/
+.expo/
+dist/
+.env
+*.log
+android/.gradle/
+android/app/build/
+coverage/
+

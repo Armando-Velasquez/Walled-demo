@@ -1,0 +1,118 @@
+CREATE DATABASE IF NOT EXISTS `{{DATABASE_NAME}}`
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE `{{DATABASE_NAME}}`;
+
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  display_name VARCHAR(80) NOT NULL,
+  email VARCHAR(160) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin','user') NOT NULL DEFAULT 'user',
+  email_verified_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role ENUM('admin','user') NOT NULL DEFAULT 'user';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS wallets (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  name VARCHAR(80) NOT NULL,
+  address VARCHAR(128) NOT NULL UNIQUE,
+  pin_hash VARCHAR(255) NOT NULL,
+  onboarding_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_wallet_user FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallets_user_id ON wallets(user_id);
+
+CREATE TABLE IF NOT EXISTS assets (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  symbol VARCHAR(12) NOT NULL UNIQUE,
+  name VARCHAR(80) NOT NULL,
+  network VARCHAR(80) NOT NULL,
+  color CHAR(7) NOT NULL,
+  price_usd DECIMAL(24,8) NOT NULL,
+  change_24h DECIMAL(10,4) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS wallet_balances (
+  wallet_id BIGINT UNSIGNED NOT NULL,
+  asset_id BIGINT UNSIGNED NOT NULL,
+  balance DECIMAL(30,10) NOT NULL DEFAULT 0,
+  sort_order INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (wallet_id, asset_id),
+  CONSTRAINT fk_balance_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id),
+  CONSTRAINT fk_balance_asset FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  wallet_id BIGINT UNSIGNED NOT NULL,
+  asset_id BIGINT UNSIGNED NOT NULL,
+  related_asset_id BIGINT UNSIGNED NULL,
+  type ENUM('send','receive','swap','buy') NOT NULL,
+  status ENUM('pending','completed','failed') NOT NULL DEFAULT 'completed',
+  amount DECIMAL(30,10) NOT NULL,
+  amount_usd DECIMAL(20,2) NOT NULL,
+  fee_usd DECIMAL(20,4) NOT NULL DEFAULT 0,
+  counterparty VARCHAR(160) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_transaction_wallet FOREIGN KEY (wallet_id) REFERENCES wallets(id),
+  CONSTRAINT fk_transaction_asset FOREIGN KEY (asset_id) REFERENCES assets(id),
+  CONSTRAINT fk_transaction_related_asset FOREIGN KEY (related_asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS dapps (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  name VARCHAR(80) NOT NULL,
+  category VARCHAR(40) NOT NULL,
+  description VARCHAR(160) NOT NULL,
+  color CHAR(7) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  token_hash CHAR(64) NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  user_id BIGINT UNSIGNED NOT NULL,
+  code_hash CHAR(64) NOT NULL,
+  attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_verification_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_verification_user ON email_verification_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_verification_expires ON email_verification_tokens(expires_at);
+
+CREATE TABLE IF NOT EXISTS email_outbox (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  to_email VARCHAR(160) NOT NULL,
+  subject VARCHAR(180) NOT NULL,
+  text_body TEXT NOT NULL,
+  html_body MEDIUMTEXT NOT NULL,
+  status ENUM('pending','sending','sent','failed') NOT NULL DEFAULT 'pending',
+  attempts SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+  next_attempt_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_error VARCHAR(500) NULL,
+  sent_at DATETIME NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_outbox_pending ON email_outbox(status, next_attempt_at);

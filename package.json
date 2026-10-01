@@ -1,0 +1,20 @@
+{
+  "name": "wallet-demo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "api",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace api",
+    "dev:mobile": "npm run start --workspace mobile",
+    "web": "npm run web --workspace mobile",
+    "check": "npm run check --workspace api && npm run check --workspace mobile",
+    "db:init": "npm run db:init --workspace api",
+    "db:reset": "npm run db:reset --workspace api"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}

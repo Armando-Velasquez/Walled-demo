@@ -1,0 +1,86 @@
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import type { AdminUser, AuthResponse, Bootstrap, RegistrationResponse } from './types';
+
+const TOKEN_KEY = 'wallet_demo_session';
+const defaultBaseUrl = Platform.select({ android: 'http://10.0.2.2:4100', default: 'http://localhost:4100' });
+const baseUrl = process.env.EXPO_PUBLIC_API_URL || defaultBaseUrl;
+let authToken = '';
+
+export class ApiRequestError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function request<T>(path: string, options?: RequestInit, authenticated = true): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authenticated && authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...(options?.headers || {}),
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiRequestError(data.message || 'No se pudo completar la operación', response.status, data.code);
+  return data as T;
+}
+
+async function saveSession(result: AuthResponse) {
+  authToken = result.token;
+  await SecureStore.setItemAsync(TOKEN_KEY, result.token);
+  return result;
+}
+
+export async function restoreSession() {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!token) return false;
+  authToken = token;
+  try {
+    await request('/api/v1/auth/me');
+    return true;
+  } catch {
+    authToken = '';
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    return false;
+  }
+}
+
+export async function loadWallet(): Promise<Bootstrap> {
+  return request<Bootstrap>('/api/v1/bootstrap');
+}
+
+export const walletApi = {
+  login: async (body: { email: string; password: string }) =>
+    saveSession(await request<AuthResponse>('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }, false)),
+  register: async (body: { displayName: string; email: string; password: string; pin: string }) =>
+    request<RegistrationResponse>('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }, false),
+  verifyEmail: async (body: { email: string; code: string }) =>
+    saveSession(await request<AuthResponse>('/api/v1/auth/verify-email', { method: 'POST', body: JSON.stringify(body) }, false)),
+  resendVerification: (email: string) =>
+    request<{ ok: true; message: string }>('/api/v1/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }, false),
+  logout: async () => {
+    try { await request('/api/v1/auth/logout', { method: 'POST' }); } finally {
+      authToken = '';
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    }
+  },
+  send: (body: { symbol: string; amount: number; recipient: string }) =>
+    request('/api/v1/transactions/send', { method: 'POST', body: JSON.stringify(body) }),
+  swap: (body: { fromSymbol: string; toSymbol: string; amount: number }) =>
+    request<{ received: number; feeUsd: number }>('/api/v1/swap', { method: 'POST', body: JSON.stringify(body) }),
+  buy: (body: { symbol: string; usdAmount: number }) =>
+    request<{ received: number; feeUsd: number }>('/api/v1/transactions/buy', { method: 'POST', body: JSON.stringify(body) }),
+  onboarding: (completed: boolean) =>
+    request('/api/v1/onboarding', { method: 'PUT', body: JSON.stringify({ completed }) }),
+  adminUsers: () => request<{ users: AdminUser[] }>('/api/v1/admin/users'),
+  adminFund: (body: { userId: number; symbol: string; amount: number }) =>
+    request<{ recipientName: string }>('/api/v1/admin/fund', { method: 'POST', body: JSON.stringify(body) }),
+};

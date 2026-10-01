@@ -1,0 +1,163 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import { requireAuth, revokeSession } from './auth.js';
+import {
+  createBuy,
+  createTransfer,
+  createSwap,
+  getAsset,
+  getBootstrap,
+  fundUser,
+  listUsersForAdmin,
+  loginUser,
+  registerUser,
+  resendEmailVerification,
+  updateOnboarding,
+  verifyEmail,
+} from './repository.js';
+
+export const app = express();
+app.use(helmet());
+app.use(cors());
+app.use(express.json({ limit: '32kb' }));
+
+const asyncRoute = (handler) => (request, response, next) =>
+  Promise.resolve(handler(request, response)).catch(next);
+
+const processingDelay = () => new Promise((resolve) => setTimeout(resolve, 850));
+
+function requirePositiveNumber(value, field) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw Object.assign(new Error(`${field} debe ser mayor que cero`), { status: 400 });
+  }
+  return number;
+}
+
+function requireText(value, field, minimum = 1) {
+  const text = String(value || '').trim();
+  if (text.length < minimum) throw Object.assign(new Error(`${field} no es válido`), { status: 400 });
+  return text;
+}
+
+function requireAdmin(request, response, next) {
+  if (request.auth.role !== 'admin') return response.status(403).json({ message: 'Acceso exclusivo para administración' });
+  next();
+}
+
+app.get('/health', asyncRoute(async (_request, response) => {
+  response.json({ ok: true, service: 'wallet-demo-api', database: 'connected' });
+}));
+
+app.post('/api/v1/auth/register', asyncRoute(async (request, response) => {
+  const displayName = requireText(request.body.displayName, 'Nombre', 2);
+  const email = requireText(request.body.email, 'Correo', 5).toLowerCase();
+  const password = requireText(request.body.password, 'Contraseña', 8);
+  const pin = String(request.body.pin || '');
+  if (!/^\S+@\S+\.\S+$/.test(email)) return response.status(400).json({ message: 'Ingresa un correo válido' });
+  if (!/^\d{6}$/.test(pin)) return response.status(400).json({ message: 'El PIN debe tener 6 dígitos' });
+  await processingDelay();
+  response.status(201).json(await registerUser({ displayName, email, password, pin }));
+}));
+
+app.post('/api/v1/auth/login', asyncRoute(async (request, response) => {
+  const email = requireText(request.body.email, 'Correo', 5);
+  const password = requireText(request.body.password, 'Contraseña', 1);
+  await processingDelay();
+  response.json(await loginUser({
+    email,
+    password,
+    ip: request.ip || request.socket.remoteAddress || 'No disponible',
+    userAgent: String(request.headers['user-agent'] || 'No disponible').slice(0, 240),
+  }));
+}));
+
+app.post('/api/v1/auth/verify-email', asyncRoute(async (request, response) => {
+  const email = requireText(request.body.email, 'Correo', 5);
+  const code = String(request.body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return response.status(400).json({ message: 'El código debe tener 6 dígitos' });
+  response.json(await verifyEmail({ email, code }));
+}));
+
+app.post('/api/v1/auth/resend-verification', asyncRoute(async (request, response) => {
+  const email = requireText(request.body.email, 'Correo', 5);
+  await resendEmailVerification(email);
+  response.json({ ok: true, message: 'Si la cuenta está pendiente, recibirás un código nuevo.' });
+}));
+
+app.use('/api/v1', requireAuth);
+
+app.get('/api/v1/auth/me', asyncRoute(async (request, response) => {
+  response.json({
+    user: {
+      id: request.auth.user_id,
+      displayName: request.auth.display_name,
+      email: request.auth.email,
+      role: request.auth.role,
+    },
+  });
+}));
+
+app.post('/api/v1/auth/logout', asyncRoute(async (request, response) => {
+  await revokeSession(request.auth.token);
+  response.json({ ok: true });
+}));
+
+app.get('/api/v1/bootstrap', asyncRoute(async (request, response) => {
+  response.json(await getBootstrap(request.auth.wallet_id));
+}));
+
+app.get('/api/v1/assets/:symbol', asyncRoute(async (request, response) => {
+  const asset = await getAsset(request.auth.wallet_id, request.params.symbol);
+  if (!asset) return response.status(404).json({ message: 'Activo no encontrado' });
+  response.json(asset);
+}));
+
+app.post('/api/v1/transactions/send', asyncRoute(async (request, response) => {
+  const amount = requirePositiveNumber(request.body.amount, 'El monto');
+  const symbol = String(request.body.symbol || '').toUpperCase();
+  const recipient = String(request.body.recipient || '').trim();
+  if (recipient.length < 5) return response.status(400).json({ message: 'Ingresa el correo o dirección del destinatario' });
+  await processingDelay();
+  response.status(201).json(await createTransfer({ walletId: request.auth.wallet_id, symbol, amount, recipient }));
+}));
+
+app.post('/api/v1/transactions/buy', asyncRoute(async (request, response) => {
+  const usdAmount = requirePositiveNumber(request.body.usdAmount, 'El monto');
+  if (usdAmount > 10000) return response.status(400).json({ message: 'El máximo por compra es $10,000' });
+  const symbol = String(request.body.symbol || '').toUpperCase();
+  await processingDelay();
+  response.status(201).json(await createBuy({ walletId: request.auth.wallet_id, symbol, usdAmount }));
+}));
+
+app.post('/api/v1/swap', asyncRoute(async (request, response) => {
+  const amount = requirePositiveNumber(request.body.amount, 'El monto');
+  const fromSymbol = String(request.body.fromSymbol || '').toUpperCase();
+  const toSymbol = String(request.body.toSymbol || '').toUpperCase();
+  if (fromSymbol === toSymbol) return response.status(400).json({ message: 'Selecciona activos diferentes' });
+  await processingDelay();
+  response.status(201).json(await createSwap({ walletId: request.auth.wallet_id, fromSymbol, toSymbol, amount }));
+}));
+
+app.put('/api/v1/onboarding', asyncRoute(async (request, response) => {
+  await updateOnboarding(request.auth.wallet_id, Boolean(request.body.completed));
+  response.json({ ok: true });
+}));
+
+app.get('/api/v1/admin/users', requireAdmin, asyncRoute(async (_request, response) => {
+  response.json({ users: await listUsersForAdmin() });
+}));
+
+app.post('/api/v1/admin/fund', requireAdmin, asyncRoute(async (request, response) => {
+  const userId = requirePositiveNumber(request.body.userId, 'El usuario');
+  const amount = requirePositiveNumber(request.body.amount, 'El monto');
+  const symbol = String(request.body.symbol || '').toUpperCase();
+  await processingDelay();
+  response.status(201).json(await fundUser({ userId, symbol, amount, adminEmail: request.auth.email }));
+}));
+
+app.use((error, _request, response, _next) => {
+  console.error(error);
+  response.status(error.status || 500).json({ message: error.message || 'Error interno', ...(error.code ? { code: error.code } : {}) });
+});

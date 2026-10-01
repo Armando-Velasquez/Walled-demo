@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Wallet",
+    "slug": "wallet-demo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.josue.walletdemo",
+      "adaptiveIcon": {
+        "backgroundColor": "#070A12"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.josue.walletdemo",
+      "supportsTablet": false
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
