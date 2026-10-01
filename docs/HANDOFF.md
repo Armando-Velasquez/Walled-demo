@@ -58,7 +58,7 @@ cd android
 `prebuild` regenera `mobile/android`; después hay que confirmar que:
 
 - `mobile/android/local.properties` contiene la ruta del Android SDK.
-- `mobile/android/gradle.properties` contiene `org.gradle.java.home` apuntando al JBR de Android Studio.
+- `JAVA_HOME` apunta al JBR de Android Studio durante la compilación local. No se guarda `org.gradle.java.home` en `gradle.properties`, porque una ruta de Windows rompería el runner Ubuntu de GitHub Actions.
 - El `<application>` del manifest permite `android:usesCleartextTraffic="true"` mientras se use la API HTTP local.
 
 Copiar el resultado desde `mobile/android/app/build/outputs/apk/release/app-release.apk` hacia `artifacts/Wallet-demo-android.apk`.
