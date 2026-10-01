@@ -367,7 +367,7 @@ export function PinScreen({ complete, navigate }: { complete: () => void; naviga
 function ActionButton({ icon, label, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.quickAction}>
-      <LinearGradient colors={['#4D8DFF', '#7166FF']} style={styles.quickIcon}><Ionicons name={icon} size={23} color="#FFF" /></LinearGradient>
+      <View style={styles.quickIcon}><Ionicons name={icon} size={22} color="#72AAFF" /></View>
       <Text style={styles.quickLabel}>{label}</Text>
     </Pressable>
   );
@@ -377,31 +377,67 @@ function AssetRow({ asset, onPress }: { asset: Asset; onPress: () => void }) {
   return (
     <Pressable onPress={onPress} style={styles.assetRow}>
       <CoinIcon asset={asset} />
-      <View style={styles.assetName}><Text style={styles.assetTitle}>{asset.name}</Text><Text style={styles.assetSymbol}>{asset.symbol}</Text></View>
-      <View style={styles.assetValue}><Text style={styles.assetTitle}>{money(asset.valueUsd)}</Text><Text style={[styles.assetChange, { color: asset.change24h >= 0 ? colors.success : colors.danger }]}>{asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%</Text></View>
+      <View style={styles.assetName}><Text style={styles.assetTitle}>{asset.name}</Text><Text style={styles.assetSymbol}>{amountText(asset.balance)} {asset.symbol}</Text></View>
+      <View style={styles.assetValue}><Text style={styles.assetTitle}>{money(asset.valueUsd)}</Text><Text style={[styles.assetChange, { color: asset.change24h >= 0 ? colors.success : colors.danger }]}>{asset.change24h >= 0 ? '↗ +' : '↘ '}{asset.change24h.toFixed(2)}%</Text></View>
     </Pressable>
   );
 }
 
+function PortfolioChart() {
+  const [width, setWidth] = useState(0);
+  const values = [48, 43, 46, 38, 42, 37, 31, 35, 28, 32, 25, 21, 24, 18, 20, 14, 17, 10];
+  const height = 92;
+  const points = width ? values.map((value, index) => ({ x: (index / (values.length - 1)) * width, y: value })) : [];
+  return (
+    <View style={[styles.portfolioChart, { height }]} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {[0, 1, 2].map((line) => <View key={line} style={[styles.chartGridLine, { top: 14 + line * 28 }]} />)}
+      {points.slice(0, -1).map((point, index) => {
+        const next = points[index + 1]!;
+        const segmentWidth = Math.hypot(next.x - point.x, next.y - point.y);
+        const angle = Math.atan2(next.y - point.y, next.x - point.x);
+        return <View key={index} style={[styles.lineSegment, { width: segmentWidth, left: point.x, top: point.y, transform: [{ rotateZ: `${angle}rad` }] }]} />;
+      })}
+      {points.length ? <View style={[styles.chartLastDot, { left: points[points.length - 1]!.x - 5, top: points[points.length - 1]!.y - 4 }]} /> : null}
+    </View>
+  );
+}
+
+function AllocationBar({ assets }: { assets: Asset[] }) {
+  const total = assets.reduce((sum, asset) => sum + asset.valueUsd, 0) || 1;
+  return (
+    <View>
+      <View style={styles.allocationBar}>{assets.filter((asset) => asset.valueUsd > 0).map((asset) => <View key={asset.symbol} style={{ flex: asset.valueUsd / total, backgroundColor: asset.color }} />)}</View>
+      <View style={styles.allocationLegend}>{assets.slice(0, 3).map((asset) => <View key={asset.symbol} style={styles.legendItem}><View style={[styles.legendDot, { backgroundColor: asset.color }]} /><Text style={styles.legendText}>{asset.symbol} {Math.round((asset.valueUsd / total) * 100)}%</Text></View>)}</View>
+    </View>
+  );
+}
+
 export function HomeScreen({ data, navigate, offline }: { data: Bootstrap; navigate: Navigate; offline: boolean }) {
+  const [balanceVisible, setBalanceVisible] = useState(true);
   return (
     <View style={styles.mainShell}>
-      <Screen style={styles.homeScreen}>
+      <Screen scroll style={styles.homeScreen}>
         <View style={styles.homeHeader}>
-          <LogoMark size={34} />
-          <View style={styles.headerIcons}><Ionicons name="notifications-outline" size={24} color={colors.text} /><Pressable onPress={() => navigate('profile')}><Ionicons name="settings-outline" size={24} color={colors.text} /></Pressable></View>
+          <View style={styles.accountHeader}><LogoMark size={38} /><View><Text style={styles.greeting}>Hola, {data.user.displayName.split(' ')[0]}</Text><Text style={styles.walletName}>{data.wallet.name}</Text></View></View>
+          <View style={styles.headerIcons}><Pressable style={styles.headerCircle}><Ionicons name="scan-outline" size={20} color={colors.text} /></Pressable><Pressable style={styles.headerCircle} onPress={() => navigate('activity')}><Ionicons name="notifications-outline" size={20} color={colors.text} /></Pressable></View>
         </View>
         {offline ? <View style={styles.offline}><Ionicons name="cloud-offline-outline" size={15} color={colors.warning} /><Text style={styles.offlineText}>Modo local: inicia la API para guardar cambios</Text></View> : null}
-        <Text style={styles.balance}>{money(data.wallet.totalUsd)}</Text>
-        <Text style={styles.gain}>▲ +{data.wallet.change24h.toFixed(2)}% (24h)</Text>
+        <LinearGradient colors={['#14233A', '#0E1827', '#0B131F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.portfolioCard}>
+          <View style={styles.balanceTop}><View><Text style={styles.balanceLabel}>BALANCE TOTAL</Text><Text style={styles.balance}>{balanceVisible ? money(data.wallet.totalUsd) : '••••••'}</Text></View><Pressable style={styles.eyeButton} onPress={() => setBalanceVisible((visible) => !visible)}><Ionicons name={balanceVisible ? 'eye-outline' : 'eye-off-outline'} size={19} color={colors.muted} /></Pressable></View>
+          <View style={styles.performanceRow}><View style={styles.performancePill}><Ionicons name={data.wallet.change24h >= 0 ? 'trending-up' : 'trending-down'} size={15} color={data.wallet.change24h >= 0 ? colors.success : colors.danger} /><Text style={[styles.gain, { color: data.wallet.change24h >= 0 ? colors.success : colors.danger }]}>{data.wallet.change24h >= 0 ? '+' : ''}{data.wallet.change24h.toFixed(2)}%</Text></View><Text style={styles.periodText}>últimas 24 horas</Text></View>
+          <PortfolioChart />
+          <View style={styles.chartFooter}><Text style={styles.chartPeriodActive}>1D</Text><Text style={styles.chartPeriod}>1S</Text><Text style={styles.chartPeriod}>1M</Text><Text style={styles.chartPeriod}>1A</Text><Text style={styles.chartPeriod}>Todo</Text></View>
+        </LinearGradient>
         <View style={styles.quickRow}>
           <ActionButton icon="arrow-up" label="Enviar" onPress={() => navigate('send')} />
           <ActionButton icon="arrow-down" label="Recibir" onPress={() => navigate('receive')} />
           <ActionButton icon="swap-horizontal" label="Swap" onPress={() => navigate('swap')} />
           <ActionButton icon="card-outline" label="Comprar" onPress={() => navigate('buy')} />
         </View>
-        <View style={styles.assetTabs}><Text style={styles.assetTabActive}>Activos</Text><Text style={styles.assetTab}>NFTs</Text><Text style={styles.assetTab}>DeFi</Text></View>
-        <ScrollView style={styles.assetList} showsVerticalScrollIndicator={false}>{data.assets.map((asset) => <AssetRow key={asset.symbol} asset={asset} onPress={() => navigate('asset', asset)} />)}</ScrollView>
+        <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Distribución</Text><Text style={styles.sectionAction}>Portafolio</Text></View>
+        <Card style={styles.allocationCard}><AllocationBar assets={data.assets} /></Card>
+        <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Tus activos</Text><Pressable onPress={() => navigate('explore')}><Text style={styles.sectionAction}>Ver mercado</Text></Pressable></View>
+        <Card style={styles.assetsCard}>{data.assets.map((asset) => <AssetRow key={asset.symbol} asset={asset} onPress={() => navigate('asset', asset)} />)}</Card>
       </Screen>
       <BottomNav active="home" navigate={navigate} />
     </View>
@@ -534,19 +570,22 @@ function DappRow({ dapp, onPress }: { dapp: Dapp; onPress: () => void }) {
   return <Pressable onPress={onPress} style={({ pressed }) => [styles.dappRow, pressed && styles.rowPressed]}><LinearGradient colors={['#FFFFFF', '#E9ECF6']} style={styles.dappIcon}>{dappImages[dapp.name] ? <Image source={dappImages[dapp.name]} style={styles.dappImage} resizeMode="contain" /> : <Ionicons name={dappIcons[dapp.name] || 'apps'} size={25} color={dapp.color} />}</LinearGradient><View style={styles.flex}><Text style={styles.assetTitle}>{dapp.name}</Text><Text style={styles.dappDescription}>{dapp.description}</Text><Text style={styles.dappCategory}>{dapp.category} · {dappMetrics[dapp.name] || 'Mercado activo'}</Text></View><Ionicons name="chevron-forward" size={22} color={colors.muted} /></Pressable>;
 }
 
-export function ExploreScreen({ dapps, navigate }: { dapps: Dapp[]; navigate: Navigate }) {
+export function ExploreScreen({ assets, dapps, navigate }: { assets: Asset[]; dapps: Dapp[]; navigate: Navigate }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('Todo');
   const { showDialog, dialog } = useWalletDialog();
   const filtered = dapps.filter((dapp) => (category === 'Todo' || dapp.category === category) && `${dapp.name} ${dapp.description}`.toLowerCase().includes(query.toLowerCase()));
   return (
     <View style={styles.mainShell}>
-      <Screen>
+      <Screen scroll>
         <View style={styles.pageTitleRow}><Text style={commonStyles.title}>Explorar</Text><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></View>
         <View style={styles.search}><Ionicons name="search" color={colors.muted} size={20} /><TextInput value={query} onChangeText={setQuery} style={styles.searchInput} placeholder="Buscar protocolos y mercados..." placeholderTextColor={colors.muted} /></View>
-        <LinearGradient colors={['#262B70', '#172A50', '#0E1B2D']} style={styles.marketHero}><View><Text style={styles.marketEyebrow}>MERCADO SIMULADO</Text><Text style={styles.marketTitle}>Oportunidades Web3</Text><Text style={styles.marketCopy}>Protocolos, rendimientos y tendencias en un solo lugar.</Text></View><View style={styles.marketOrb}><Ionicons name="analytics" size={31} color="#74E8FF" /></View></LinearGradient>
+        <LinearGradient colors={['#173764', '#11243E', '#0D1827']} style={styles.marketHero}><View><Text style={styles.marketEyebrow}>MERCADOS DIGITALES</Text><Text style={styles.marketTitle}>Descubre oportunidades</Text><Text style={styles.marketCopy}>Sigue activos, tendencias y protocolos desde un solo lugar.</Text></View><View style={styles.marketOrb}><Ionicons name="analytics" size={31} color="#75AEFF" /></View></LinearGradient>
+        <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Mercado</Text><Text style={styles.marketStatus}>● EN VIVO</Text></View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.marketCards}>{assets.slice(0, 4).map((asset) => <Pressable key={asset.symbol} onPress={() => navigate('asset', asset)}><Card style={styles.marketCard}><View style={styles.marketCardTop}><CoinIcon asset={asset} size={34} /><Text style={[styles.assetChange, { color: asset.change24h >= 0 ? colors.success : colors.danger }]}>{asset.change24h >= 0 ? '+' : ''}{asset.change24h.toFixed(2)}%</Text></View><Text style={styles.marketCardSymbol}>{asset.symbol}</Text><Text style={styles.marketCardPrice}>{money(asset.priceUsd)}</Text></Card></Pressable>)}</ScrollView>
+        <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Protocolos Web3</Text><Text style={styles.sectionAction}>{filtered.length} disponibles</Text></View>
         <ScrollView horizontal style={styles.chipScroller} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>{['Todo', 'DeFi', 'NFT', 'Gaming', 'Bridge'].map((chip) => <Pressable key={chip} onPress={() => setCategory(chip)} style={[styles.chip, chip === category && styles.chipActive]}><Text style={[styles.chipText, chip === category && { color: '#FFF' }]}>{chip}</Text></Pressable>)}</ScrollView>
-        <ScrollView showsVerticalScrollIndicator={false}>{filtered.length ? filtered.map((dapp) => <DappRow key={dapp.id} dapp={dapp} onPress={() => showDialog({ title: dapp.name, message: `${dapp.description}. Los datos mostrados son simulados; la conexión financiera se habilitará en una etapa posterior.`, tone: 'info' })} />) : <View style={styles.emptyCompact}><Ionicons name="search-outline" size={30} color="#7772FF" /><Text style={styles.emptyTitle}>Sin resultados</Text><Text style={styles.emptyBody}>Prueba otra búsqueda o categoría.</Text></View>}</ScrollView>
+        <View>{filtered.length ? filtered.map((dapp) => <DappRow key={dapp.id} dapp={dapp} onPress={() => showDialog({ title: dapp.name, message: `${dapp.description}. La integración de este protocolo estará disponible próximamente.`, tone: 'info' })} />) : <View style={styles.emptyCompact}><Ionicons name="search-outline" size={30} color="#7772FF" /><Text style={styles.emptyTitle}>Sin resultados</Text><Text style={styles.emptyBody}>Prueba otra búsqueda o categoría.</Text></View>}</View>
         {dialog}
       </Screen>
       <BottomNav active="explore" navigate={navigate} />
@@ -799,22 +838,50 @@ const styles = StyleSheet.create({
   keypad: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 14, marginTop: 5 },
   key: { width: '28%', aspectRatio: 1.55, maxHeight: 68, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
   keyText: { color: colors.text, fontSize: 24, fontWeight: '600' },
-  homeHeader: { height: 43, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  homeScreen: { paddingBottom: 0 },
-  headerIcons: { flexDirection: 'row', gap: 20, alignItems: 'center' },
+  homeHeader: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  homeScreen: { paddingBottom: 12 },
+  accountHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  greeting: { color: colors.text, fontSize: 16, fontWeight: '800' },
+  walletName: { color: colors.muted, fontSize: 11.5, marginTop: 3 },
+  headerIcons: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  headerCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },
   offline: { flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#2A2214', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, alignSelf: 'flex-start' },
   offlineText: { color: colors.warning, fontSize: 11 },
-  balance: { color: colors.text, fontSize: 34, fontWeight: '800', letterSpacing: -1.2, marginTop: 5 },
-  gain: { color: colors.success, fontSize: 13, fontWeight: '700', marginTop: 3 },
-  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, marginBottom: 13 },
-  quickAction: { width: '23%', alignItems: 'center', gap: 6 },
-  quickIcon: { width: 50, height: 46, borderRadius: 15, alignItems: 'center', justifyContent: 'center', ...shadow },
-  quickLabel: { color: colors.text, fontSize: 11.5, fontWeight: '600' },
+  portfolioCard: { borderRadius: 26, borderWidth: 1, borderColor: '#263952', padding: 18, overflow: 'hidden', ...shadow },
+  balanceTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
+  balanceLabel: { color: '#718198', fontSize: 10.5, fontWeight: '800', letterSpacing: 1.15 },
+  balance: { color: colors.text, fontSize: 32, fontWeight: '800', letterSpacing: -1.1, marginTop: 7 },
+  eyeButton: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,.04)', borderWidth: 1, borderColor: 'rgba(255,255,255,.08)', alignItems: 'center', justifyContent: 'center' },
+  performanceRow: { flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 8 },
+  performancePill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(33,206,153,.10)', borderRadius: 12, paddingHorizontal: 8, paddingVertical: 5 },
+  gain: { color: colors.success, fontSize: 12, fontWeight: '800' },
+  periodText: { color: colors.muted, fontSize: 11.5 },
+  portfolioChart: { marginTop: 8, overflow: 'hidden' },
+  chartGridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: 'rgba(129,154,188,.09)' },
+  lineSegment: { position: 'absolute', height: 2, borderRadius: 2, backgroundColor: '#4A96FF', transformOrigin: 'left center' },
+  chartLastDot: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#70B2FF', borderWidth: 3, borderColor: '#173E70' },
+  chartFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 3 },
+  chartPeriod: { color: colors.muted, fontSize: 10.5, fontWeight: '700', paddingHorizontal: 7, paddingVertical: 5 },
+  chartPeriodActive: { color: '#9DC5FF', fontSize: 10.5, fontWeight: '800', backgroundColor: 'rgba(56,124,255,.17)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 9 },
+  quickRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 17, marginBottom: 8 },
+  quickAction: { width: '23%', alignItems: 'center', gap: 7 },
+  quickIcon: { width: 52, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111D2D', borderWidth: 1, borderColor: '#26364A' },
+  quickLabel: { color: '#C9D1DE', fontSize: 11.5, fontWeight: '700' },
+  sectionHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 20, marginBottom: 10 },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
+  sectionAction: { color: '#6BA7FF', fontSize: 12, fontWeight: '700' },
+  allocationCard: { paddingVertical: 15 },
+  allocationBar: { height: 8, flexDirection: 'row', borderRadius: 5, overflow: 'hidden', gap: 2, backgroundColor: colors.surfaceRaised },
+  allocationLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 13 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendDot: { width: 7, height: 7, borderRadius: 4 },
+  legendText: { color: colors.muted, fontSize: 10.5, fontWeight: '600' },
+  assetsCard: { paddingTop: 0, paddingBottom: 0, paddingHorizontal: 14 },
   assetTabs: { height: 38, flexDirection: 'row', gap: 34, borderBottomWidth: 1, borderBottomColor: colors.border, alignItems: 'center' },
   assetTab: { color: colors.muted, fontSize: 15 },
   assetTabActive: { color: colors.text, fontSize: 15, fontWeight: '700', borderBottomWidth: 2, borderBottomColor: '#7A6FFF', height: 38, textAlignVertical: 'center' },
   assetList: { flex: 1 },
-  assetRow: { minHeight: 63, borderBottomWidth: 1, borderBottomColor: '#1B2230', flexDirection: 'row', alignItems: 'center', gap: 12 },
+  assetRow: { minHeight: 70, borderBottomWidth: 1, borderBottomColor: '#1B2736', flexDirection: 'row', alignItems: 'center', gap: 12 },
   assetName: { flex: 1 },
   assetValue: { alignItems: 'flex-end' },
   assetTitle: { color: colors.text, fontSize: 15.5, fontWeight: '700' },
@@ -864,10 +931,16 @@ const styles = StyleSheet.create({
   marketTitle: { color: '#FFF', fontSize: 21, fontWeight: '800', marginTop: 7 },
   marketCopy: { color: '#BBC5D8', fontSize: 12.5, lineHeight: 18, width: 225, marginTop: 5 },
   marketOrb: { width: 62, height: 62, borderRadius: 31, backgroundColor: 'rgba(75,214,255,.12)', borderWidth: 1, borderColor: 'rgba(102,225,255,.3)', alignItems: 'center', justifyContent: 'center', marginLeft: 'auto' },
+  marketStatus: { color: colors.success, fontSize: 9.5, fontWeight: '900', letterSpacing: 1 },
+  marketCards: { gap: 10, paddingRight: 4 },
+  marketCard: { width: 145, minHeight: 112, padding: 13 },
+  marketCardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  marketCardSymbol: { color: colors.muted, fontSize: 11, fontWeight: '800', marginTop: 10 },
+  marketCardPrice: { color: colors.text, fontSize: 16, fontWeight: '800', marginTop: 3 },
   chipScroller: { flexGrow: 0, height: 62 },
   chips: { gap: 9, paddingVertical: 10, alignItems: 'center' },
   chip: { height: 42, minWidth: 64, paddingHorizontal: 18, borderRadius: 21, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  chipActive: { backgroundColor: '#6672FF', borderColor: '#6672FF' },
+  chipActive: { backgroundColor: '#3278F1', borderColor: '#3278F1' },
   chipText: { color: colors.muted, fontWeight: '600', lineHeight: 18, includeFontPadding: false },
   dappRow: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 14 },
   rowPressed: { opacity: 0.65, transform: [{ scale: 0.99 }] },
@@ -875,7 +948,7 @@ const styles = StyleSheet.create({
   dappImage: { width: 36, height: 36, borderRadius: 8 },
   dappLetter: { color: '#FFF', fontSize: 26, fontWeight: '900' },
   dappDescription: { color: colors.muted, fontSize: 13, marginTop: 3 },
-  dappCategory: { color: '#7772FF', fontSize: 12, marginTop: 2 },
+  dappCategory: { color: '#6BA7FF', fontSize: 12, marginTop: 2 },
   transaction: { minHeight: 82, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
   transactionIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   emptyActivityScroll: { flexGrow: 1, justifyContent: 'center', paddingBottom: 30 },

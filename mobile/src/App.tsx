@@ -138,7 +138,7 @@ export default function App() {
       case 'send': return <SendScreen asset={asset} navigate={navigate} submit={send} />;
       case 'receive': return <ReceiveScreen asset={asset} walletAddress={data.wallet.address} navigate={navigate} />;
       case 'swap': return <SwapScreen assets={data.assets} navigate={navigate} submit={swap} />;
-      case 'explore': return <ExploreScreen dapps={data.dapps} navigate={navigate} />;
+      case 'explore': return <ExploreScreen assets={data.assets} dapps={data.dapps} navigate={navigate} />;
       case 'activity': return <ActivityScreen transactions={data.transactions} navigate={navigate} />;
       case 'profile': return <ProfileScreen data={data} navigate={navigate} logout={logout} />;
       case 'admin': return <AdminScreen assets={data.assets} navigate={navigate} loadUsers={async () => (await walletApi.adminUsers()).users} submit={async (userId, symbol, amount) => (await walletApi.adminFund({ userId, symbol, amount })).recipientName} />;

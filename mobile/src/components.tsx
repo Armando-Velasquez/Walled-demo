@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -77,9 +78,9 @@ export function GradientButton({ label, onPress, disabled, icon }: { label: stri
   return (
     <Animated.View style={[styles.buttonWrap, { transform: [{ scale }] }, disabled && { opacity: 0.6 }]}>
       <Pressable onPress={onPress} disabled={disabled} onPressIn={() => animate(0.97)} onPressOut={() => animate(1)}>
-        <LinearGradient colors={['#F27BFF', '#7072FF', '#43C8FF']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.gradientButton}>
+        <LinearGradient colors={['#397DFF', '#2866E8']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.gradientButton}>
           <Text style={styles.buttonText}>{label}</Text>
-          {icon ? <Ionicons name={icon} size={20} color="#09101B" /> : null}
+          {icon ? <Ionicons name={icon} size={20} color="#FFFFFF" /> : null}
         </LinearGradient>
       </Pressable>
     </Animated.View>
@@ -112,7 +113,7 @@ export function LogoMark({ size = 78 }: { size?: number }) {
   }, [pulse]);
   return (
     <Animated.View style={{ width: size, height: size, borderRadius: size * 0.28, transform: [{ scale: pulse }] }}>
-      <LinearGradient colors={['#52D8FF', '#8B63FF', '#F17BFF']} style={[styles.logoOuter, { flex: 1, borderRadius: size * 0.28 }]}> 
+      <LinearGradient colors={['#58B5FF', '#347CFF', '#655CFF']} style={[styles.logoOuter, { flex: 1, borderRadius: size * 0.28 }]}> 
         <View style={[styles.logoInner, { borderRadius: size * 0.25 }]}> 
           <Ionicons name="wallet" size={size * 0.5} color="#B8A2FF" />
         </View>
@@ -121,8 +122,21 @@ export function LogoMark({ size = 78 }: { size?: number }) {
   );
 }
 
+const coinImages: Record<string, number> = {
+  BTC: require('../assets/coins/btc.png'),
+  ETH: require('../assets/coins/eth.png'),
+  SOL: require('../assets/coins/sol.png'),
+  USDT: require('../assets/coins/usdt.png'),
+  MATIC: require('../assets/coins/matic.png'),
+};
+
 export function CoinIcon({ asset, size = 43 }: { asset: Pick<Asset, 'symbol' | 'color'>; size?: number }) {
-  return <View style={[styles.coin, { backgroundColor: asset.color, width: size, height: size, borderRadius: size / 2 }]}><Text style={[styles.coinText, { fontSize: size * 0.38 }]}>{asset.symbol.slice(0, 1)}</Text></View>;
+  const source = coinImages[asset.symbol.toUpperCase()];
+  return (
+    <View style={[styles.coin, { backgroundColor: source ? '#111A27' : asset.color, width: size, height: size, borderRadius: size / 2 }]}>
+      {source ? <Image source={source} style={{ width: size, height: size }} resizeMode="contain" /> : <Text style={[styles.coinText, { fontSize: size * 0.38 }]}>{asset.symbol.slice(0, 1)}</Text>}
+    </View>
+  );
 }
 
 export function Card({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) {
@@ -148,10 +162,10 @@ export function BottomNav({ active, navigate }: { active: AppScreen; navigate: (
         const selected = active === tab.key || (tab.key === 'swap' && ['send', 'receive', 'asset', 'buy'].includes(active));
         return (
           <Pressable key={tab.key} onPress={() => navigate(tab.key)} style={styles.tab}>
-            {tab.key === 'swap' ? (
-              <LinearGradient colors={['#F27BFF', '#7072FF', '#43C8FF']} style={styles.mainTab}><Ionicons name={tab.icon} size={25} color="#0A0E16" /></LinearGradient>
-            ) : <Ionicons name={tab.icon} size={22} color={selected ? '#8582FF' : colors.muted} />}
-            <Text style={[styles.tabLabel, selected && { color: '#8582FF' }]}>{tab.label}</Text>
+            <View style={[styles.tabIconBox, selected && styles.tabIconBoxActive]}>
+              <Ionicons name={selected ? tab.icon.replace('-outline', '') as keyof typeof Ionicons.glyphMap : tab.icon} size={21} color={selected ? '#70AAFF' : colors.muted} />
+            </View>
+            <Text style={[styles.tabLabel, selected && { color: '#70AAFF' }]}>{tab.label}</Text>
           </Pressable>
         );
       })}
@@ -177,7 +191,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', gap: 22 },
   buttonWrap: { borderRadius: radii.medium, overflow: 'hidden', ...shadow },
   gradientButton: { minHeight: 58, borderRadius: radii.medium, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, paddingHorizontal: 22 },
-  buttonText: { color: '#0A0E16', fontSize: 17, fontWeight: '800' },
+  buttonText: { color: '#FFFFFF', fontSize: 17, fontWeight: '800' },
   outlineButton: { minHeight: 58, borderRadius: radii.medium, borderWidth: 1, borderColor: '#4B5362', alignItems: 'center', justifyContent: 'center' },
   outlineText: { color: colors.text, fontSize: 17, fontWeight: '700' },
   header: { height: 60, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -189,10 +203,11 @@ const styles = StyleSheet.create({
   coinText: { color: '#FFF', fontWeight: '900' },
   card: { backgroundColor: colors.surface, borderRadius: radii.medium, borderWidth: 1, borderColor: colors.border, padding: 16 },
   loadingText: { color: colors.muted, fontSize: 16 },
-  bottomNav: { height: 74, backgroundColor: '#0A101A', borderTopWidth: 1, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 6, paddingBottom: 5 },
+  bottomNav: { height: 72, backgroundColor: '#0A111B', borderTopWidth: 1, borderTopColor: '#1E2A3A', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 6, paddingBottom: 4 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
   tabLabel: { color: colors.muted, fontSize: 10.5 },
-  mainTab: { width: 56, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: -20, ...shadow },
+  tabIconBox: { width: 38, height: 30, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  tabIconBoxActive: { backgroundColor: 'rgba(56,124,255,.15)' },
   dialogBackdrop: { flex: 1, backgroundColor: 'rgba(2,4,10,.78)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   dialogCard: { width: '100%', maxWidth: 420, borderRadius: 28, backgroundColor: '#111722', borderWidth: 1, borderColor: '#30394A', padding: 24, ...shadow },
   dialogIcon: { width: 62, height: 62, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
