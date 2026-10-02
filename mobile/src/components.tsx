@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,9 +23,20 @@ import type { AppScreen, Asset } from './types';
 
 export function Screen({ children, scroll = false, style }: PropsWithChildren<{ scroll?: boolean; style?: ViewStyle }>) {
   const entrance = useRef(new Animated.Value(0)).current;
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
     Animated.timing(entrance, { toValue: 1, duration: 360, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [entrance]);
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSubscription = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
   const animatedStyle = {
     opacity: entrance,
     transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
@@ -32,8 +44,8 @@ export function Screen({ children, scroll = false, style }: PropsWithChildren<{ 
   const content = <Animated.View style={[styles.screenContent, style, animatedStyle]}>{children}</Animated.View>;
   return (
     <SafeAreaView style={styles.safe}>
-      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
-        {scroll ? <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">{content}</ScrollView> : content}
+      <KeyboardAvoidingView style={styles.keyboard} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}>
+        {scroll ? <ScrollView contentContainerStyle={[styles.scroll, keyboardVisible && styles.scrollWithKeyboard]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" overScrollMode="never">{content}</ScrollView> : content}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -179,7 +191,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   keyboard: { flex: 1 },
   screenContent: { flex: 1, paddingHorizontal: 22, paddingBottom: 18 },
-  scroll: { flexGrow: 1, paddingBottom: 150 },
+  scroll: { flexGrow: 1, paddingBottom: 18 },
+  scrollWithKeyboard: { paddingBottom: 170 },
   center: { alignItems: 'center', justifyContent: 'center', gap: 22 },
   buttonWrap: { borderRadius: radii.medium, overflow: 'hidden', ...shadow },
   gradientButton: { minHeight: 58, borderRadius: radii.medium, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, paddingHorizontal: 22 },
