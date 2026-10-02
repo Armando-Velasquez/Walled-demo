@@ -102,23 +102,15 @@ export function Header({ title, onBack, right }: { title: string; onBack?: () =>
 }
 
 export function LogoMark({ size = 78 }: { size?: number }) {
-  const pulse = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1.035, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [pulse]);
   return (
-    <Animated.View style={{ width: size, height: size, borderRadius: size * 0.28, transform: [{ scale: pulse }] }}>
-      <LinearGradient colors={['#58B5FF', '#347CFF', '#655CFF']} style={[styles.logoOuter, { flex: 1, borderRadius: size * 0.28 }]}> 
-        <View style={[styles.logoInner, { borderRadius: size * 0.25 }]}> 
-          <Ionicons name="wallet" size={size * 0.5} color="#B8A2FF" />
+    <View style={[styles.logoMark, { width: size, height: size, borderRadius: size * 0.28 }]}> 
+      <View style={[styles.logoWallet, { width: size * 0.58, height: size * 0.42, borderRadius: size * 0.12 }]}> 
+        <View style={[styles.logoFold, { left: size * 0.08, right: size * 0.08, top: size * 0.105, height: Math.max(2, size * 0.035) }]} />
+        <View style={[styles.logoPocket, { width: size * 0.25, height: size * 0.18, borderRadius: size * 0.07, right: -size * 0.035, top: size * 0.12 }]}>
+          <View style={[styles.logoDot, { width: size * 0.045, height: size * 0.045, borderRadius: size * 0.023 }]} />
         </View>
-      </LinearGradient>
-    </Animated.View>
+      </View>
+    </View>
   );
 }
 
@@ -199,6 +191,11 @@ const styles = StyleSheet.create({
   headerSide: { width: 28, alignItems: 'flex-end' },
   logoOuter: { padding: 2, ...shadow },
   logoInner: { flex: 1, backgroundColor: '#0B0E17', alignItems: 'center', justifyContent: 'center' },
+  logoMark: { backgroundColor: '#0E1B2C', borderWidth: 1, borderColor: '#29466B', alignItems: 'center', justifyContent: 'center' },
+  logoWallet: { backgroundColor: '#397DFF', justifyContent: 'center' },
+  logoFold: { position: 'absolute', borderRadius: 4, backgroundColor: 'rgba(255,255,255,.72)' },
+  logoPocket: { position: 'absolute', backgroundColor: '#0A1524', borderWidth: 1, borderColor: 'rgba(255,255,255,.75)', alignItems: 'center', justifyContent: 'center' },
+  logoDot: { backgroundColor: '#FFFFFF' },
   coin: { alignItems: 'center', justifyContent: 'center' },
   coinText: { color: '#FFF', fontWeight: '900' },
   card: { backgroundColor: colors.surface, borderRadius: radii.medium, borderWidth: 1, borderColor: colors.border, padding: 16 },

@@ -38,7 +38,7 @@ type Navigate = (screen: AppScreen, asset?: Asset) => void;
 function AbstractBackdrop() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <LinearGradient colors={['#10164C', '#050710', '#0D1428']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={['#0D1828', '#070B12', '#0B1421']} style={StyleSheet.absoluteFill} />
       <View style={[styles.glow, styles.glowTop]} />
       <View style={[styles.glow, styles.glowBottom]} />
       <View style={styles.diagonalOne} />
@@ -47,51 +47,27 @@ function AbstractBackdrop() {
   );
 }
 
-export function SplashScreen({ next }: { next: () => void }) {
-  const reveal = useRef(new Animated.Value(0)).current;
-  const orbit = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.spring(reveal, { toValue: 1, damping: 12, stiffness: 75, useNativeDriver: true }).start();
-    const loop = Animated.loop(Animated.timing(orbit, { toValue: 1, duration: 10000, easing: Easing.linear, useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [orbit, reveal]);
-  return (
-    <Screen style={styles.splash}>
-      <AbstractBackdrop />
-      <Animated.View style={[styles.techRing, { transform: [{ rotate: orbit.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }]}><View style={styles.techRingDot} /></Animated.View>
-      <Animated.View style={[styles.splashCenter, { opacity: reveal, transform: [{ scale: reveal }, { translateY: reveal.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
-        <View style={styles.logoHalo}><LogoMark size={106} /></View>
-        <Text style={styles.brand}>Wallet</Text>
-        <Text style={styles.tagline}>Tu mundo cripto,{`\n`}en una sola app.</Text>
-        <View style={styles.livePill}><View style={styles.liveDot} /><Text style={styles.liveText}>Protección inteligente activa</Text></View>
-      </Animated.View>
-      <Pressable onPress={next} style={styles.startButton}>
-        <Text style={styles.startText}>Comenzar</Text>
-        <Ionicons name="arrow-forward" size={21} color={colors.text} />
-      </Pressable>
-    </Screen>
-  );
-}
-
 const onboarding = [
   {
-    title: 'Control total\nde tus criptoactivos',
-    body: 'Envía, recibe, intercambia y explora nuevas oportunidades, todo en un solo lugar.',
+    eyebrow: 'TU PORTAFOLIO',
+    title: 'Tus activos,\nen un solo lugar',
+    body: 'Consulta saldos, movimientos y rendimiento desde una experiencia clara y segura.',
     icon: 'logo-bitcoin' as const,
     accent: '#477CFF',
   },
   {
-    title: 'Seguridad\nen tus manos',
-    body: 'Tus claves, tus activos. Con cifrado de nivel avanzado y control total de tu billetera.',
-    icon: 'shield-checkmark' as const,
-    accent: '#785CFF',
+    eyebrow: 'OPERACIONES SIMPLES',
+    title: 'Intercambia\nsin complicaciones',
+    body: 'Envía, recibe y convierte activos con confirmaciones claras en cada operación.',
+    icon: 'swap-horizontal' as const,
+    accent: '#3887FF',
   },
   {
-    title: 'Más que una billetera',
-    body: 'Conecta con DeFi, explora dApps y aprovecha todo el ecosistema Web3.',
-    icon: 'layers' as const,
-    accent: '#C657F7',
+    eyebrow: 'SEGURIDAD PERSONAL',
+    title: 'El control está\nen tus manos',
+    body: 'Protege tu cuenta y mantén acceso a todas las funciones de tu billetera.',
+    icon: 'shield-checkmark' as const,
+    accent: '#4368E8',
   },
 ];
 
@@ -150,34 +126,156 @@ export function OnboardingScreen({ index, next }: { index: number; next: () => v
               </LinearGradient>
             </Animated.View>
           </View>
-          <View style={styles.onboardingCopy}><Text style={commonStyles.title}>{item.title}</Text><Text style={[commonStyles.subtitle, { marginTop: 14 }]}>{item.body}</Text></View>
+          <View style={styles.onboardingCopy}><Text style={styles.onboardingEyebrow}>{item.eyebrow}</Text><Text style={[commonStyles.title, styles.onboardingTitle]}>{item.title}</Text><Text style={[commonStyles.subtitle, { marginTop: 14 }]}>{item.body}</Text></View>
         </View>)}
       </ScrollView>
       <View style={styles.onboardingBottom}>
         <View style={styles.dots}>{onboarding.map((_, dot) => <Pressable key={dot} onPress={() => { setActive(dot); scrollRef.current?.scrollTo({ x: dot * pageWidth, animated: true }); }} style={[styles.dot, dot === active && styles.dotActive]} />)}</View>
-        <Pressable onPress={() => { if (active < onboarding.length - 1) { const target = active + 1; setActive(target); scrollRef.current?.scrollTo({ x: target * pageWidth, animated: true }); } else next(); }} style={styles.nextSquare}><Ionicons name={active === onboarding.length - 1 ? 'checkmark' : 'arrow-forward'} size={27} color="#FFF" /></Pressable>
+        <Pressable onPress={next} style={styles.onboardingContinue}><Text style={styles.onboardingContinueText}>Continuar</Text><Ionicons name="arrow-forward" size={20} color="#FFF" /></Pressable>
       </View>
     </Screen>
+  );
+}
+
+function WelcomePortfolioVisual() {
+  const floatMotion = useRef(new Animated.Value(0)).current;
+  const coinMotion = useRef(new Animated.Value(0)).current;
+  const glowMotion = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const floating = Animated.loop(Animated.sequence([
+      Animated.timing(floatMotion, { toValue: 1, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(floatMotion, { toValue: 0, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    const coins = Animated.loop(Animated.sequence([
+      Animated.timing(coinMotion, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(coinMotion, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    const glowing = Animated.loop(Animated.sequence([
+      Animated.timing(glowMotion, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(glowMotion, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    floating.start();
+    coins.start();
+    glowing.start();
+    return () => {
+      floating.stop();
+      coins.stop();
+      glowing.stop();
+    };
+  }, [coinMotion, floatMotion, glowMotion]);
+
+  return (
+    <View style={styles.welcomeVisual} pointerEvents="none">
+      <Animated.View style={[styles.welcomeVisualGlow, {
+        opacity: glowMotion.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.42] }),
+        transform: [{ scale: glowMotion.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] }) }],
+      }]} />
+      <Animated.View style={[styles.welcomeBalanceFloat, {
+        transform: [
+          { translateY: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [5, -8] }) },
+          { rotateZ: floatMotion.interpolate({ inputRange: [0, 1], outputRange: ['-2.5deg', '-0.5deg'] }) },
+          { scale: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [0.99, 1.015] }) },
+        ],
+      }]}>
+        <LinearGradient colors={['#172943', '#0D1827']} style={styles.welcomeBalanceCard}>
+          <View style={styles.welcomeBalanceTop}><Text style={styles.previewLabel}>BALANCE TOTAL</Text><Ionicons name="eye-outline" size={17} color={colors.muted} /></View>
+          <Text style={styles.previewBalance}>$12,432.21</Text>
+          <View style={styles.previewGain}><Ionicons name="trending-up" size={14} color={colors.success} /><Text style={styles.previewGainText}>+5.32%</Text></View>
+          <View style={styles.previewChart}>{[24, 33, 28, 42, 36, 50, 45, 61, 55, 70].map((height, index) => <View key={index} style={[styles.previewBar, { height }]} />)}</View>
+        </LinearGradient>
+      </Animated.View>
+      <Animated.View style={[styles.previewCoin, styles.previewCoinOne, {
+        transform: [
+          { translateY: coinMotion.interpolate({ inputRange: [0, 1], outputRange: [-4, 7] }) },
+          { rotateZ: coinMotion.interpolate({ inputRange: [0, 1], outputRange: ['-5deg', '7deg'] }) },
+        ],
+      }]}><Text style={styles.previewCoinText}>₿</Text></Animated.View>
+      <Animated.View style={[styles.previewCoin, styles.previewCoinTwo, {
+        transform: [
+          { translateY: coinMotion.interpolate({ inputRange: [0, 1], outputRange: [6, -6] }) },
+          { rotateZ: coinMotion.interpolate({ inputRange: [0, 1], outputRange: ['8deg', '-6deg'] }) },
+        ],
+      }]}><Text style={styles.previewCoinText}>◆</Text></Animated.View>
+    </View>
   );
 }
 
 export function WelcomeScreen({ navigate }: { navigate: Navigate }) {
   const { showDialog, dialog } = useWalletDialog();
   return (
-    <Screen style={styles.welcome}>
+    <Screen scroll style={styles.welcome}>
       <AbstractBackdrop />
+      <View style={styles.entryBrand}><LogoMark size={42} /><Text style={styles.entryBrandText}>Wallet</Text></View>
       <View style={styles.welcomeTop}>
-        <View style={styles.welcomeOrb}><View style={styles.welcomeOrbInner}><LogoMark size={96} /></View></View>
-        <Text style={[commonStyles.title, { textAlign: 'center', marginTop: 28 }]}>Bienvenido a Wallet</Text>
-        <Text style={[commonStyles.subtitle, { textAlign: 'center', marginTop: 10 }]}>Crea una cuenta para guardar tu billetera o inicia sesión para continuar.</Text>
+        <WelcomePortfolioVisual />
+        <Text style={[commonStyles.title, styles.welcomeTitle]}>Tu portafolio digital,{`\n`}simple y seguro</Text>
+        <Text style={[commonStyles.subtitle, styles.welcomeSubtitle]}>Administra activos, transferencias y tarjetas desde una experiencia creada para tu teléfono.</Text>
       </View>
-      <View style={styles.welcomeActions}>
+      <View style={styles.welcomePanel}>
         <GradientButton label="Crear cuenta" onPress={() => navigate('register')} />
         <OutlineButton label="Iniciar sesión" onPress={() => navigate('login')} />
-        <OutlineButton label="Importar billetera" onPress={() => showDialog({ title: 'Importación protegida', message: 'Esta función se habilitará cuando se conecte el módulo seguro de claves.', tone: 'info' })} />
+        <Pressable onPress={() => showDialog({ title: 'Importación protegida', message: 'Esta función se habilitará cuando se conecte el módulo seguro de claves.', tone: 'info' })}><Text style={styles.entryLink}>Importar una billetera existente</Text></Pressable>
       </View>
       {dialog}
     </Screen>
+  );
+}
+
+function AuthFloatingVisual({ mode }: { mode: 'login' | 'register' }) {
+  const floatMotion = useRef(new Animated.Value(0)).current;
+  const orbitMotion = useRef(new Animated.Value(0)).current;
+  const glowMotion = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const floating = Animated.loop(Animated.sequence([
+      Animated.timing(floatMotion, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(floatMotion, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    const orbiting = Animated.loop(Animated.timing(orbitMotion, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true }));
+    const glowing = Animated.loop(Animated.sequence([
+      Animated.timing(glowMotion, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      Animated.timing(glowMotion, { toValue: 0, duration: 1500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    ]));
+    floating.start();
+    orbiting.start();
+    glowing.start();
+    return () => {
+      floating.stop();
+      orbiting.stop();
+      glowing.stop();
+    };
+  }, [floatMotion, glowMotion, orbitMotion]);
+
+  const floatingStyle = {
+    transform: [
+      { translateY: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [5, -7] }) },
+      { rotateZ: floatMotion.interpolate({ inputRange: [0, 1], outputRange: ['-2deg', '2deg'] }) },
+      { scale: floatMotion.interpolate({ inputRange: [0, 1], outputRange: [0.98, 1.02] }) },
+    ],
+  };
+  const orbitRotation = orbitMotion.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const glowStyle = {
+    opacity: glowMotion.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.62] }),
+    transform: [{ scale: glowMotion.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.1] }) }],
+  };
+
+  return (
+    <View style={styles.authVisual} pointerEvents="none">
+      <Animated.View style={[styles.authVisualGlow, glowStyle]} />
+      <Animated.View style={[styles.authVisualOrbit, { transform: [{ rotate: orbitRotation }] }]}>
+        <View style={styles.authVisualOrbitDot} />
+        <View style={styles.authVisualOrbitDotSecondary} />
+      </Animated.View>
+      <Animated.View style={[styles.authVisualCard, floatingStyle]}>
+        <LinearGradient colors={mode === 'login' ? ['#347EFF', '#17254A'] : ['#586DFF', '#172044']} style={styles.authVisualGradient}>
+          <LogoMark size={58} />
+          <View style={styles.authVisualBadge}><Ionicons name={mode === 'login' ? 'lock-closed' : 'person-add'} size={16} color="#FFF" /></View>
+        </LinearGradient>
+      </Animated.View>
+      <View style={[styles.authVisualChip, styles.authVisualChipLeft]}><Ionicons name="shield-checkmark" size={16} color="#58E5BD" /></View>
+      <View style={[styles.authVisualChip, styles.authVisualChipRight]}><Ionicons name="sparkles" size={15} color="#82B8FF" /></View>
+    </View>
   );
 }
 
@@ -217,22 +315,29 @@ export function AuthScreen({
   const disabled = busy || !emailValid || !password || (!isLogin && (!displayName.trim() || !passwordStrong || !/^\d{6}$/.test(pin)));
   return (
     <Screen scroll>
+      <AbstractBackdrop />
       <Header title="" onBack={() => navigate('welcome')} />
-      <View style={styles.authLogo}><LogoMark size={72} /></View>
-      <Text style={[commonStyles.title, { textAlign: 'center' }]}>{isLogin ? 'Iniciar sesión' : 'Crear tu cuenta'}</Text>
-      <Text style={[commonStyles.subtitle, styles.authSubtitle]}>{isLogin ? 'Accede de forma segura a tu portafolio.' : 'Crea tu perfil y protege el acceso a tu wallet.'}</Text>
-      <View style={styles.authForm}>
-        {!isLogin ? <><Text style={commonStyles.label}>Nombre</Text><TextInput value={displayName} onChangeText={setDisplayName} style={commonStyles.input} placeholder="Tu nombre" placeholderTextColor={colors.muted} /></> : null}
-        <Text style={commonStyles.label}>Correo</Text>
-        <TextInput value={email} onChangeText={setEmail} style={commonStyles.input} placeholder="correo@ejemplo.com" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" />
-        <Text style={commonStyles.label}>Contraseña</Text>
-        <View style={styles.passwordField}><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Mínimo 8 caracteres" placeholderTextColor={colors.muted} secureTextEntry={!passwordVisible} autoCapitalize="none" /><Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={23} color="#9892FF" /></Pressable></View>
-        {!isLogin && password.length ? <View style={styles.passwordChecks}>{passwordChecks.map((check) => <View key={check.label} style={styles.passwordCheck}><Ionicons name={check.ok ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={check.ok ? colors.success : colors.muted} /><Text style={[styles.passwordCheckText, check.ok && { color: colors.success }]}>{check.label}</Text></View>)}</View> : null}
-        {!isLogin ? <><Text style={commonStyles.label}>PIN de 6 dígitos</Text><TextInput value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))} style={commonStyles.input} placeholder="••••••" placeholderTextColor={colors.muted} secureTextEntry keyboardType="number-pad" /></> : null}
-        <GradientButton label={busy ? (isLogin ? 'Verificando...' : 'Creando wallet...') : (isLogin ? 'Entrar' : 'Registrarme')} disabled={disabled} onPress={() => void run()} />
+      <View style={styles.authIntro}>
+        <View style={styles.entryBrand}><LogoMark size={40} /><Text style={styles.entryBrandText}>Wallet</Text></View>
+        {isLogin ? <AuthFloatingVisual mode={mode} /> : null}
+        <Text style={[commonStyles.title, styles.authTitle, !isLogin && styles.authTitleWithoutVisual]}>{isLogin ? 'Bienvenido de nuevo' : 'Crea tu cuenta'}</Text>
+        <Text style={[commonStyles.subtitle, styles.authSubtitle]}>{isLogin ? 'Accede a tu portafolio y continúa donde lo dejaste.' : 'Configura tu perfil y empieza a administrar tus activos.'}</Text>
       </View>
+      <Card style={styles.authPanel}>
+        <View style={styles.authForm}>
+          {!isLogin ? <><Text style={commonStyles.label}>Nombre</Text><View style={styles.authField}><Ionicons name="person-outline" size={20} color={colors.muted} /><TextInput value={displayName} onChangeText={setDisplayName} style={styles.authInput} placeholder="Tu nombre" placeholderTextColor={colors.muted} /></View></> : null}
+          <Text style={commonStyles.label}>Correo electrónico</Text>
+          <View style={styles.authField}><Ionicons name="mail-outline" size={20} color={colors.muted} /><TextInput value={email} onChangeText={setEmail} style={styles.authInput} placeholder="correo@ejemplo.com" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" /></View>
+          <Text style={commonStyles.label}>Contraseña</Text>
+          <View style={styles.passwordField}><Ionicons name="lock-closed-outline" size={20} color={colors.muted} /><TextInput value={password} onChangeText={setPassword} style={styles.passwordInput} placeholder="Mínimo 8 caracteres" placeholderTextColor={colors.muted} secureTextEntry={!passwordVisible} autoCapitalize="none" /><Pressable onPress={() => setPasswordVisible((value) => !value)} hitSlop={12}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={22} color="#6FA8FF" /></Pressable></View>
+          {!isLogin && password.length ? <View style={styles.passwordChecks}>{passwordChecks.map((check) => <View key={check.label} style={styles.passwordCheck}><Ionicons name={check.ok ? 'checkmark-circle' : 'ellipse-outline'} size={15} color={check.ok ? colors.success : colors.muted} /><Text style={[styles.passwordCheckText, check.ok && { color: colors.success }]}>{check.label}</Text></View>)}</View> : null}
+          {!isLogin ? <><Text style={commonStyles.label}>PIN de 6 dígitos</Text><View style={styles.authField}><Ionicons name="keypad-outline" size={20} color={colors.muted} /><TextInput value={pin} onChangeText={(value) => setPin(value.replace(/\D/g, '').slice(0, 6))} style={styles.authInput} placeholder="••••••" placeholderTextColor={colors.muted} secureTextEntry keyboardType="number-pad" /></View></> : null}
+          {isLogin ? <View style={styles.authOptions}><View style={styles.secureAccess}><Ionicons name="shield-checkmark-outline" size={15} color={colors.success} /><Text style={styles.secureAccessText}>Acceso protegido</Text></View><Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text></View> : null}
+          <GradientButton label={busy ? (isLogin ? 'Verificando...' : 'Creando wallet...') : (isLogin ? 'Entrar a Wallet' : 'Crear cuenta')} disabled={disabled} onPress={() => void run()} icon="arrow-forward" />
+        </View>
+      </Card>
       {isLogin && __DEV__ ? <Text style={styles.demoCredentials}>Credenciales locales cargadas en modo desarrollo</Text> : null}
-      <Pressable onPress={() => navigate(isLogin ? 'register' : 'login')}><Text style={styles.link}>{isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}</Text></Pressable>
+      <Pressable onPress={() => navigate(isLogin ? 'register' : 'login')}><Text style={styles.link}>{isLogin ? '¿No tienes cuenta? Crear una cuenta' : '¿Ya tienes cuenta? Iniciar sesión'}</Text></Pressable>
       {dialog}
     </Screen>
   );
@@ -418,7 +523,7 @@ export function HomeScreen({ data, navigate, offline }: { data: Bootstrap; navig
     <View style={styles.mainShell}>
       <Screen scroll style={styles.homeScreen}>
         <View style={styles.homeHeader}>
-          <View style={styles.accountHeader}><LogoMark size={38} /><View><Text style={styles.greeting}>Hola, {data.user.displayName.split(' ')[0]}</Text><Text style={styles.walletName}>{data.wallet.name}</Text></View></View>
+          <Pressable style={styles.accountHeader} onPress={() => navigate('profile')}><LogoMark size={38} /><View><Text style={styles.greeting}>{data.wallet.name}</Text><Text style={styles.walletName}>{data.wallet.address.slice(0, 7)}...{data.wallet.address.slice(-4)}</Text></View><Ionicons name="chevron-down" size={16} color={colors.muted} /></Pressable>
           <View style={styles.headerIcons}><Pressable style={styles.headerCircle}><Ionicons name="scan-outline" size={20} color={colors.text} /></Pressable><Pressable style={styles.headerCircle} onPress={() => navigate('activity')}><Ionicons name="notifications-outline" size={20} color={colors.text} /></Pressable></View>
         </View>
         {offline ? <View style={styles.offline}><Ionicons name="cloud-offline-outline" size={15} color={colors.warning} /><Text style={styles.offlineText}>Modo local: inicia la API para guardar cambios</Text></View> : null}
@@ -768,56 +873,90 @@ export const firstAsset = (data: Bootstrap, preferred?: Asset | null) => preferr
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  splash: { alignItems: 'center', justifyContent: 'space-between', paddingTop: 96, paddingBottom: 48, overflow: 'hidden' },
-  splashCenter: { alignItems: 'center', zIndex: 2, marginTop: 70 },
-  techRing: { position: 'absolute', top: 142, width: 245, height: 245, borderRadius: 123, borderWidth: 1, borderColor: 'rgba(106,119,255,.4)' },
-  techRingDot: { position: 'absolute', top: -5, left: 112, width: 10, height: 10, borderRadius: 5, backgroundColor: '#72E5FF', shadowColor: '#72E5FF', shadowOpacity: 1, shadowRadius: 12 },
-  logoHalo: { padding: 22, borderRadius: 52, backgroundColor: 'rgba(96,89,255,.08)', borderWidth: 1, borderColor: 'rgba(119,111,255,.18)' },
-  brand: { color: '#FFF', fontSize: 48, fontWeight: '900', letterSpacing: -1.7, marginTop: 22 },
-  tagline: { color: '#E2E4EE', fontSize: 19, lineHeight: 28, textAlign: 'center', marginTop: 24 },
-  startButton: { zIndex: 2, minWidth: 210, minHeight: 64, borderRadius: 32, borderWidth: 1, borderColor: '#7D74FF', backgroundColor: '#16162E', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, ...shadow },
-  startText: { color: '#FFF', fontSize: 17, fontWeight: '700' },
-  livePill: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 24, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 18, backgroundColor: 'rgba(13,22,38,.75)', borderWidth: 1, borderColor: '#28334A' },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.success },
-  liveText: { color: '#AAB4C8', fontSize: 12, fontWeight: '600' },
-  glow: { position: 'absolute', width: 260, height: 260, borderRadius: 130, opacity: 0.33, backgroundColor: '#703DFF' },
+  glow: { position: 'absolute', width: 260, height: 260, borderRadius: 130, opacity: 0.22, backgroundColor: '#245DA8' },
   glowTop: { left: -130, top: 40 },
-  glowBottom: { right: -100, bottom: -20, backgroundColor: '#5235FF' },
-  diagonalOne: { position: 'absolute', width: 520, height: 90, backgroundColor: '#111737', transform: [{ rotate: '38deg' }], left: -180, top: 230, opacity: 0.8 },
-  diagonalTwo: { position: 'absolute', width: 520, height: 100, backgroundColor: '#151344', transform: [{ rotate: '38deg' }], left: -80, bottom: 80, opacity: 0.75 },
+  glowBottom: { right: -100, bottom: -20, backgroundColor: '#193C76' },
+  diagonalOne: { position: 'absolute', width: 520, height: 90, backgroundColor: '#101B2C', transform: [{ rotate: '38deg' }], left: -180, top: 230, opacity: 0.82 },
+  diagonalTwo: { position: 'absolute', width: 520, height: 100, backgroundColor: '#11233B', transform: [{ rotate: '38deg' }], left: -80, bottom: 80, opacity: 0.72 },
   onboardingPager: { flex: 1 },
-  onboardingArt: { flex: 1.1, minHeight: 360, alignItems: 'center', justifyContent: 'center' },
+  onboardingArt: { flex: 1.1, minHeight: 340, alignItems: 'center', justifyContent: 'center' },
   orbit: { position: 'absolute', width: 270, height: 270, borderRadius: 135, borderWidth: 1 },
   orbitNode: { position: 'absolute', width: 12, height: 12, borderRadius: 6, top: 18, right: 38, shadowColor: '#7A70FF', shadowOpacity: 1, shadowRadius: 12 },
   innerOrbit: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 1 },
   animatedArtCoin: { zIndex: 2 },
-  artCoin: { width: 175, height: 175, borderRadius: 88, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], ...shadow },
+  artCoin: { width: 168, height: 168, borderRadius: 48, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '-8deg' }], ...shadow },
   artCoinActive: { borderWidth: 1, borderColor: 'rgba(255,255,255,.18)' },
   miniCoin: { position: 'absolute', width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center', opacity: 0.9 },
   bitcoinOrbiter: { left: -25, top: 100 },
   ethereumOrbiter: { right: -25, top: 34 },
   miniCoinText: { color: '#FFF', fontSize: 30, fontWeight: '900' },
-  onboardingCopy: { minHeight: 190, justifyContent: 'center' },
+  onboardingCopy: { minHeight: 182, justifyContent: 'center' },
+  onboardingEyebrow: { color: '#6FA8FF', fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5, marginBottom: 10 },
+  onboardingTitle: { fontSize: 31, lineHeight: 37 },
   onboardingBottom: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 16 },
   dots: { flexDirection: 'row', gap: 10 },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#2B3244' },
-  dotActive: { backgroundColor: '#766DFF', width: 11, height: 11 },
-  nextSquare: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6179FF', ...shadow },
-  welcome: { justifyContent: 'space-between', paddingTop: 100, paddingBottom: 55 },
-  welcomeTop: { alignItems: 'center', zIndex: 2 },
+  dotActive: { backgroundColor: '#4A8FFF', width: 24, height: 9 },
+  nextSquare: { width: 64, height: 64, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#397DFF', ...shadow },
+  onboardingContinue: { minWidth: 142, height: 52, paddingHorizontal: 20, borderRadius: 17, backgroundColor: '#397DFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, ...shadow },
+  onboardingContinueText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  welcome: { minHeight: 740, paddingTop: 18, paddingBottom: 28 },
+  entryBrand: { flexDirection: 'row', alignItems: 'center', gap: 11, zIndex: 2 },
+  entryBrandText: { color: colors.text, fontSize: 20, fontWeight: '900', letterSpacing: -0.4 },
+  welcomeTop: { alignItems: 'center', zIndex: 2, marginTop: 24 },
+  welcomeVisual: { width: '100%', height: 260, alignItems: 'center', justifyContent: 'center' },
+  welcomeVisualGlow: { position: 'absolute', width: '78%', height: 185, borderRadius: 70, backgroundColor: '#287CFF', shadowColor: '#378AFF', shadowOpacity: 0.65, shadowRadius: 34 },
+  welcomeBalanceFloat: { width: '86%', minHeight: 205, borderRadius: 27, shadowColor: '#2C7EFF', shadowOpacity: 0.4, shadowRadius: 22, shadowOffset: { width: 0, height: 15 }, elevation: 12 },
+  welcomeBalanceCard: { width: '100%', minHeight: 205, borderRadius: 27, borderWidth: 1, borderColor: '#29415F', padding: 19, ...shadow },
+  welcomeBalanceTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  previewLabel: { color: colors.muted, fontSize: 9.5, fontWeight: '800', letterSpacing: 1.2 },
+  previewBalance: { color: colors.text, fontSize: 28, fontWeight: '900', marginTop: 10 },
+  previewGain: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7 },
+  previewGainText: { color: colors.success, fontSize: 11, fontWeight: '800' },
+  previewChart: { height: 75, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 13 },
+  previewBar: { width: 4, borderRadius: 4, backgroundColor: '#4A96FF', opacity: 0.85 },
+  previewCoin: { position: 'absolute', width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', borderWidth: 4, borderColor: colors.background, ...shadow },
+  previewCoinOne: { backgroundColor: '#F7931A', right: 5, top: 25 },
+  previewCoinTwo: { backgroundColor: '#627EEA', left: 2, bottom: 28 },
+  previewCoinText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
+  welcomeTitle: { textAlign: 'center', marginTop: 10, fontSize: 31, lineHeight: 38 },
+  welcomeSubtitle: { textAlign: 'center', marginTop: 12, maxWidth: 340 },
   welcomeOrb: { width: 180, height: 180, borderRadius: 90, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(117,107,255,.32)', backgroundColor: 'rgba(71,67,177,.08)' },
   welcomeOrbInner: { width: 140, height: 140, borderRadius: 70, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(79,207,255,.18)' },
   welcomeActions: { gap: 16, zIndex: 2 },
+  welcomePanel: { gap: 13, zIndex: 2, marginTop: 28, backgroundColor: 'rgba(10,17,27,.86)', borderWidth: 1, borderColor: '#1F2C3D', borderRadius: 25, padding: 16 },
+  entryLink: { color: '#74AFFF', textAlign: 'center', fontSize: 13.5, fontWeight: '700', paddingVertical: 5 },
   authLogo: { alignItems: 'center', marginTop: 10, marginBottom: 20 },
-  authSubtitle: { textAlign: 'center', marginTop: 10, marginBottom: 26 },
+  authIntro: { marginTop: 8, marginBottom: 24, zIndex: 2 },
+  authVisual: { height: 170, alignItems: 'center', justifyContent: 'center', marginTop: 8, marginBottom: 2 },
+  authVisualGlow: { position: 'absolute', width: 138, height: 138, borderRadius: 69, backgroundColor: '#2E74FF', shadowColor: '#4288FF', shadowOpacity: 0.75, shadowRadius: 34 },
+  authVisualOrbit: { position: 'absolute', width: 154, height: 154, borderRadius: 77, borderWidth: 1, borderColor: 'rgba(92,145,255,.36)' },
+  authVisualOrbitDot: { position: 'absolute', width: 9, height: 9, borderRadius: 5, top: 15, right: 22, backgroundColor: '#78B7FF', shadowColor: '#78B7FF', shadowOpacity: 1, shadowRadius: 9 },
+  authVisualOrbitDotSecondary: { position: 'absolute', width: 6, height: 6, borderRadius: 3, bottom: 17, left: 21, backgroundColor: '#625DFF' },
+  authVisualCard: { width: 108, height: 108, borderRadius: 32, padding: 1, shadowColor: '#327CFF', shadowOpacity: 0.65, shadowRadius: 22, shadowOffset: { width: 0, height: 13 }, elevation: 14 },
+  authVisualGradient: { flex: 1, borderRadius: 31, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,.18)' },
+  authVisualBadge: { position: 'absolute', right: -7, bottom: 7, width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111B2B', borderWidth: 2, borderColor: '#4A8FFF' },
+  authVisualChip: { position: 'absolute', width: 35, height: 35, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111C2B', borderWidth: 1, borderColor: '#2C4260', shadowColor: '#3987FF', shadowOpacity: 0.35, shadowRadius: 10 },
+  authVisualChipLeft: { left: '21%', bottom: 30, transform: [{ rotate: '-12deg' }] },
+  authVisualChipRight: { right: '20%', top: 30, transform: [{ rotate: '10deg' }] },
+  authTitle: { marginTop: 4, fontSize: 31 },
+  authTitleWithoutVisual: { marginTop: 28 },
+  authSubtitle: { marginTop: 10, maxWidth: 350 },
+  authPanel: { padding: 18, borderRadius: 25, backgroundColor: 'rgba(14,21,32,.96)', borderColor: '#26364A', zIndex: 2 },
   authForm: { gap: 12 },
-  passwordField: { minHeight: 62, borderRadius: radii.medium, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16 },
+  authField: { minHeight: 58, borderRadius: 16, backgroundColor: '#111B29', borderWidth: 1, borderColor: '#26364A', flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 15 },
+  authInput: { flex: 1, color: colors.text, fontSize: 16, paddingVertical: 0 },
+  passwordField: { minHeight: 58, borderRadius: 16, backgroundColor: '#111B29', borderWidth: 1, borderColor: '#26364A', flexDirection: 'row', alignItems: 'center', gap: 11, paddingHorizontal: 15 },
   passwordInput: { flex: 1, color: colors.text, fontSize: 17, paddingRight: 12 },
   passwordChecks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
   passwordCheck: { flexDirection: 'row', alignItems: 'center', gap: 5, width: '47%' },
   passwordCheckText: { color: colors.muted, fontSize: 12 },
-  demoCredentials: { color: colors.success, textAlign: 'center', fontSize: 12, marginTop: 18 },
-  link: { color: '#A99AFF', textAlign: 'center', fontSize: 16, textDecorationLine: 'underline', marginTop: 8 },
+  authOptions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 2 },
+  secureAccess: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  secureAccessText: { color: colors.muted, fontSize: 11.5 },
+  forgotText: { color: '#6FA8FF', fontSize: 11.5, fontWeight: '700' },
+  demoCredentials: { color: colors.success, textAlign: 'center', fontSize: 11, marginTop: 14, zIndex: 2 },
+  link: { color: '#6FA8FF', textAlign: 'center', fontSize: 14, fontWeight: '700', marginTop: 18, paddingVertical: 8, zIndex: 2 },
   setupList: { gap: 12 },
   setupCard: { minHeight: 105, flexDirection: 'row', alignItems: 'center', gap: 16 },
   setupIcon: { width: 51, height: 51, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
@@ -840,7 +979,7 @@ const styles = StyleSheet.create({
   keyText: { color: colors.text, fontSize: 24, fontWeight: '600' },
   homeHeader: { minHeight: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   homeScreen: { paddingBottom: 12 },
-  accountHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
+  accountHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingVertical: 7, paddingLeft: 8, paddingRight: 11 },
   greeting: { color: colors.text, fontSize: 16, fontWeight: '800' },
   walletName: { color: colors.muted, fontSize: 11.5, marginTop: 3 },
   headerIcons: { flexDirection: 'row', gap: 8, alignItems: 'center' },

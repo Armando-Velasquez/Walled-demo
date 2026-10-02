@@ -19,7 +19,6 @@ import {
   ReceiveScreen,
   RecoveryScreen,
   SendScreen,
-  SplashScreen,
   SwapScreen,
   VerifyEmailScreen,
   WelcomeScreen,
@@ -28,7 +27,7 @@ import {
 import type { AppScreen, Asset, Bootstrap, PaymentCard } from './types';
 
 export default function App() {
-  const [screen, setScreen] = useState<AppScreen>('splash');
+  const [screen, setScreen] = useState<AppScreen>('onboarding1');
   const [data, setData] = useState<Bootstrap | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
@@ -46,7 +45,12 @@ export default function App() {
       try {
         const active = await restoreSession();
         setAuthenticated(active);
-        if (active) await refresh();
+        if (active) {
+          await refresh();
+          setScreen('home');
+        } else {
+          setScreen('onboarding1');
+        }
       } catch {
         setAuthenticated(false);
       } finally { setCheckingSession(false); }
@@ -150,10 +154,9 @@ export default function App() {
 
   let content;
   switch (screen) {
-    case 'splash': content = <SplashScreen next={() => navigate(authenticated ? 'home' : 'onboarding1')} />; break;
     case 'onboarding1':
     case 'onboarding2':
-    case 'onboarding3': content = <OnboardingScreen index={0} next={() => navigate('welcome')} />; break;
+    case 'onboarding3': content = <OnboardingScreen index={0} next={() => navigate(authenticated ? 'home' : 'welcome')} />; break;
     case 'welcome': content = <WelcomeScreen navigate={navigate} />; break;
     case 'login': content = <AuthScreen mode="login" navigate={navigate} submit={(values) => authenticate('login', values)} />; break;
     case 'register': content = <AuthScreen mode="register" navigate={navigate} submit={(values) => authenticate('register', values)} />; break;

@@ -87,7 +87,6 @@ export type RegistrationResponse = {
 };
 
 export type AppScreen =
-  | 'splash'
   | 'onboarding1'
   | 'onboarding2'
   | 'onboarding3'
