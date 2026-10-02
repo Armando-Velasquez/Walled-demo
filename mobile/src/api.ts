@@ -1,6 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import type { AdminUser, AuthResponse, Bootstrap, RegistrationResponse } from './types';
+import type { AdminUser, AuthResponse, Bootstrap, KycProfile, RegistrationResponse } from './types';
 
 const TOKEN_KEY = 'wallet_demo_session';
 const defaultBaseUrl = Platform.select({ android: 'http://10.0.2.2:4100', default: 'http://localhost:4100' });
@@ -85,6 +85,11 @@ export const walletApi = {
     request<{ ok: true }>(`/api/v1/payment-cards/${cardId}/default`, { method: 'PUT' }),
   onboarding: (completed: boolean) =>
     request('/api/v1/onboarding', { method: 'PUT', body: JSON.stringify({ completed }) }),
+  getKyc: () => request<{ kyc: KycProfile }>('/api/v1/kyc'),
+  submitKyc: (body: Omit<KycProfile, 'status'>) => request<{ kyc: KycProfile }>('/api/v1/kyc', { method: 'POST', body: JSON.stringify(body) }),
+  adminKyc: () => request<{ requests: KycProfile[] }>('/api/v1/admin/kyc'),
+  adminReviewKyc: (userId: number, body: { status: 'approved' | 'rejected'; riskLevel: 'low' | 'medium' | 'high'; reviewNote: string }) =>
+    request<{ displayName: string; status: string }>(`/api/v1/admin/kyc/${userId}/review`, { method: 'POST', body: JSON.stringify(body) }),
   adminUsers: () => request<{ users: AdminUser[] }>('/api/v1/admin/users'),
   adminFund: (body: { userId: number; symbol: string; amount: number }) =>
     request<{ recipientName: string }>('/api/v1/admin/fund', { method: 'POST', body: JSON.stringify(body) }),

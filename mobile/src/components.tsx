@@ -103,8 +103,8 @@ export function GradientButton({ label, onPress, disabled, icon }: { label: stri
   );
 }
 
-export function OutlineButton({ label, onPress }: { label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={styles.outlineButton}><Text style={styles.outlineText}>{label}</Text></Pressable>;
+export function OutlineButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  return <Pressable disabled={disabled} onPress={onPress} style={[styles.outlineButton, disabled && { opacity: 0.55 }]}><Text style={styles.outlineText}>{label}</Text></Pressable>;
 }
 
 export function Header({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {

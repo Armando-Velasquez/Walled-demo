@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   Easing,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -28,7 +29,7 @@ import {
   useWalletDialog,
 } from './components';
 import { colors, radii, shadow } from './theme';
-import type { AdminUser, AppScreen, Asset, Bootstrap, Dapp, PaymentCard, Transaction } from './types';
+import type { AdminUser, AppScreen, Asset, Bootstrap, Dapp, KycProfile, PaymentCard, Transaction } from './types';
 
 const money = (value: number, decimals = 2) => `$${value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
 const amountText = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 6 });
@@ -715,7 +716,7 @@ export function ActivityScreen({ transactions, navigate }: { transactions: Trans
 export function ProfileScreen({ data, navigate, logout }: { data: Bootstrap; navigate: Navigate; logout: () => Promise<void> }) {
   const { showDialog, dialog } = useWalletDialog();
   const groups = [
-    [{ icon: 'card-outline' as const, title: 'Tarjetas virtuales', sub: `${data.cards.length} agregada${data.cards.length === 1 ? '' : 's'}`, screen: 'cards' as AppScreen }, { icon: 'shield-checkmark-outline' as const, title: 'Seguridad' }, { icon: 'cloud-upload-outline' as const, title: 'Backups' }, { icon: 'globe-outline' as const, title: 'Redes', sub: 'Ethereum, Solana, BSC...' }, { icon: 'settings-outline' as const, title: 'Preferencias', sub: 'Fiat, tema, idioma...' }],
+    [{ icon: 'card-outline' as const, title: 'Tarjetas virtuales', sub: `${data.cards.length} agregada${data.cards.length === 1 ? '' : 's'}`, screen: 'cards' as AppScreen }, { icon: 'id-card-outline' as const, title: 'Verificación de identidad', sub: 'Completa o consulta tu KYC', screen: 'kyc' as AppScreen }, { icon: 'shield-checkmark-outline' as const, title: 'Seguridad' }, { icon: 'cloud-upload-outline' as const, title: 'Backups' }, { icon: 'globe-outline' as const, title: 'Redes', sub: 'Ethereum, Solana, BSC...' }, { icon: 'settings-outline' as const, title: 'Preferencias', sub: 'Fiat, tema, idioma...' }],
     [{ icon: 'help-circle-outline' as const, title: 'Ayuda y soporte' }, { icon: 'information-circle-outline' as const, title: 'Acerca de' }],
   ];
   return (
@@ -732,100 +733,232 @@ export function ProfileScreen({ data, navigate, logout }: { data: Bootstrap; nav
   );
 }
 
-export function AdminScreen({
-  assets,
-  navigate,
-  loadUsers,
-  submit,
-  verifyUser,
-  resetPassword,
-  deleteUser,
-}: {
-  assets: Asset[];
+function SelectionModal<T extends { id: number }>({ visible, title, placeholder, items, selectedId, getSearchText, renderItem, onSelect, onClose }: {
+  visible: boolean;
+  title: string;
+  placeholder: string;
+  items: T[];
+  selectedId?: number | null;
+  getSearchText: (item: T) => string;
+  renderItem: (item: T, selected: boolean) => ReactNode;
+  onSelect: (item: T) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  useEffect(() => { if (!visible) setQuery(''); }, [visible]);
+  const normalized = query.trim().toLowerCase();
+  const filtered = items.filter((item) => !normalized || getSearchText(item).toLowerCase().includes(normalized));
+  return <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+    <View style={styles.selectionBackdrop}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+      <View style={styles.selectionSheet}>
+        <View style={styles.selectionHandle} />
+        <View style={styles.selectionHeader}><Text style={styles.selectionTitle}>{title}</Text><Pressable onPress={onClose} hitSlop={12}><Ionicons name="close" size={26} color={colors.text} /></Pressable></View>
+        <View style={styles.adminSearch}><Ionicons name="search" size={20} color={colors.muted} /><TextInput value={query} onChangeText={setQuery} style={styles.adminSearchInput} placeholder={placeholder} placeholderTextColor={colors.muted} autoCapitalize="none" /></View>
+        <ScrollView style={styles.selectionList} contentContainerStyle={styles.selectionListContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          {filtered.length ? filtered.map((item) => <Pressable key={item.id} onPress={() => { onSelect(item); onClose(); }} style={[styles.selectionOption, item.id === selectedId && styles.selectionOptionSelected]}>{renderItem(item, item.id === selectedId)}</Pressable>) : <Text style={styles.adminEmpty}>No se encontraron resultados.</Text>}
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>;
+}
+
+function UserSelectionModal({ visible, users, selectedId, onSelect, onClose }: { visible: boolean; users: AdminUser[]; selectedId?: number | null; onSelect: (user: AdminUser) => void; onClose: () => void }) {
+  return <SelectionModal visible={visible} title="Seleccionar usuario" placeholder="Buscar nombre, correo o dirección" items={users} selectedId={selectedId} getSearchText={(user) => `${user.displayName} ${user.email} ${user.address}`} onSelect={onSelect} onClose={onClose} renderItem={(user, selected) => <>
+    <View style={[styles.adminIcon, !user.emailVerified && styles.adminIconPending]}><Ionicons name={user.emailVerified ? 'person' : 'mail-unread'} size={20} color="#FFF" /></View>
+    <View style={styles.flex}><View style={styles.adminUserNameRow}><Text style={styles.assetTitle}>{user.displayName}</Text><View style={[styles.adminStatus, user.emailVerified ? styles.adminStatusVerified : styles.adminStatusPending]}><Text style={[styles.adminStatusText, { color: user.emailVerified ? colors.success : colors.warning }]}>{user.emailVerified ? 'VERIFICADA' : 'PENDIENTE'}</Text></View></View><Text style={styles.assetSymbol}>{user.email}</Text><Text style={styles.settingSub}>{money(user.totalUsd)} · {user.address.slice(0, 7)}...{user.address.slice(-4)}</Text></View>
+    <Ionicons name={selected ? 'checkmark-circle' : 'chevron-forward'} size={22} color={selected ? '#6FA8FF' : colors.muted} />
+  </>} />;
+}
+
+export function AdminScreen({ navigate }: { navigate: Navigate }) {
+  const options = [
+    { screen: 'adminUsers' as const, icon: 'people-outline' as const, title: 'Gestión de usuarios', body: 'Verifica cuentas, restablece accesos y elimina usuarios.', color: '#625EFF' },
+    { screen: 'adminFund' as const, icon: 'cash-outline' as const, title: 'Acreditar saldo', body: 'Transfiere activos ficticios a una cartera registrada.', color: '#2588E8' },
+    { screen: 'adminKyc' as const, icon: 'id-card-outline' as const, title: 'Revisión KYC', body: 'Evalúa identidad, documentación y nivel de riesgo.', color: '#16A58A' },
+  ];
+  return <Screen scroll>
+    <Header title="Administración" onBack={() => navigate('profile')} right={<Ionicons name="shield-checkmark" size={23} color="#8F83FF" />} />
+    <Text style={commonStyles.title}>Centro administrativo</Text>
+    <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 22 }]}>Selecciona el módulo que deseas utilizar.</Text>
+    <View style={styles.adminHubList}>{options.map((option) => <Pressable key={option.screen} onPress={() => navigate(option.screen)}><Card style={styles.adminHubCard}><View style={[styles.adminHubIcon, { backgroundColor: option.color }]}><Ionicons name={option.icon} size={27} color="#FFF" /></View><View style={styles.flex}><Text style={styles.adminHubTitle}>{option.title}</Text><Text style={styles.adminHubBody}>{option.body}</Text></View><Ionicons name="chevron-forward" size={24} color={colors.muted} /></Card></Pressable>)}</View>
+  </Screen>;
+}
+
+export function AdminUsersScreen({ navigate, loadUsers, verifyUser, resetPassword, deleteUser }: {
   navigate: Navigate;
   loadUsers: () => Promise<AdminUser[]>;
-  submit: (userId: number, symbol: string, amount: number) => Promise<string>;
   verifyUser: (userId: number) => Promise<{ displayName: string; alreadyVerified: boolean }>;
   resetPassword: (userId: number) => Promise<{ displayName: string; email: string }>;
   deleteUser: (userId: number) => Promise<{ displayName: string }>;
 }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [selectedAsset, setSelectedAsset] = useState(0);
-  const [search, setSearch] = useState('');
-  const [amount, setAmount] = useState('100');
-  const [busyAction, setBusyAction] = useState<'fund' | 'verify' | 'reset' | 'delete' | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [busyAction, setBusyAction] = useState<'verify' | 'reset' | 'delete' | null>(null);
   const { showDialog, dialog } = useWalletDialog();
-  const targets = users.filter((user) => user.role !== 'admin');
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredTargets = targets.filter((user) => !normalizedSearch || user.displayName.toLowerCase().includes(normalizedSearch) || user.email.toLowerCase().includes(normalizedSearch) || user.address.toLowerCase().includes(normalizedSearch));
-  const target = targets.find((user) => user.id === selectedUserId) ?? targets[0];
-  const asset = assets[selectedAsset] ?? assets[0]!;
+  const target = users.find((user) => user.id === selectedUserId);
   const reload = async () => {
     try {
-      const loaded = await loadUsers();
+      const loaded = (await loadUsers()).filter((user) => user.role !== 'admin');
       setUsers(loaded);
-      const available = loaded.filter((user) => user.role !== 'admin');
-      setSelectedUserId((current) => available.some((user) => user.id === current) ? current : (available[0]?.id ?? null));
+      setSelectedUserId((current) => loaded.some((user) => user.id === current) ? current : null);
     } catch (error) { showDialog({ title: 'No se pudieron cargar las cuentas', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
     finally { setLoading(false); }
   };
   const runAction = async (action: 'verify' | 'reset' | 'delete', operation: () => Promise<{ title: string; message: string }>) => {
-    try {
-      setBusyAction(action);
-      const result = await operation();
-      await reload();
-      showDialog({ title: result.title, message: result.message, tone: 'success' });
-    } catch (error) {
-      showDialog({ title: 'No se pudo completar la acción', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' });
-    } finally { setBusyAction(null); }
+    try { setBusyAction(action); const result = await operation(); await reload(); showDialog({ title: result.title, message: result.message, tone: 'success' }); }
+    catch (error) { showDialog({ title: 'No se pudo completar la acción', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    finally { setBusyAction(null); }
   };
   useEffect(() => { void reload(); }, []);
-  return (
-    <Screen scroll>
-      <Header title="Administración" onBack={() => navigate('profile')} right={<Ionicons name="shield-checkmark" size={23} color="#8F83FF" />} />
-      <Text style={commonStyles.title}>Administrar usuarios</Text>
-      <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 18 }]}>Busca, selecciona y gestiona las cuentas registradas.</Text>
-      <View style={styles.adminSearch}><Ionicons name="search" size={20} color={colors.muted} /><TextInput value={search} onChangeText={setSearch} style={styles.adminSearchInput} placeholder="Buscar por nombre, correo o dirección" placeholderTextColor={colors.muted} autoCapitalize="none" /></View>
-      {loading ? <Text style={styles.adminEmpty}>Cargando cuentas...</Text> : targets.length === 0 ? <Card><Text style={styles.adminEmpty}>Todavía no hay usuarios registrados.</Text></Card> : (
-        <>
-          <View style={styles.adminListHeader}><Text style={commonStyles.label}>{filteredTargets.length} cuenta{filteredTargets.length === 1 ? '' : 's'}</Text><Text style={styles.adminListHint}>Toca para seleccionar</Text></View>
-          <View style={styles.adminUserList}>
-            {filteredTargets.length ? filteredTargets.map((user) => {
-              const selected = user.id === target?.id;
-              return <Pressable key={user.id} onPress={() => setSelectedUserId(user.id)}>
-                <Card style={[styles.adminUserRow, selected && styles.adminUserRowSelected]}>
-                  <View style={[styles.adminIcon, !user.emailVerified && styles.adminIconPending]}><Ionicons name={user.emailVerified ? 'person' : 'mail-unread'} size={21} color="#FFF" /></View>
-                  <View style={styles.flex}><View style={styles.adminUserNameRow}><Text style={styles.assetTitle}>{user.displayName}</Text><View style={[styles.adminStatus, user.emailVerified ? styles.adminStatusVerified : styles.adminStatusPending]}><Text style={[styles.adminStatusText, { color: user.emailVerified ? colors.success : colors.warning }]}>{user.emailVerified ? 'VERIFICADA' : 'PENDIENTE'}</Text></View></View><Text style={styles.assetSymbol}>{user.email}</Text><Text style={styles.settingSub}>{money(user.totalUsd)} · {user.address.slice(0, 7)}...{user.address.slice(-4)}</Text></View>
-                  <Ionicons name={selected ? 'checkmark-circle' : 'chevron-forward'} size={22} color={selected ? '#6FA8FF' : colors.muted} />
-                </Card>
-              </Pressable>;
-            }) : <Card><Text style={styles.adminEmpty}>No encontramos usuarios con esa búsqueda.</Text></Card>}
-          </View>
-          {target ? <Card style={styles.adminManagement}>
-            <Text style={styles.adminManagementTitle}>Gestionar a {target.displayName}</Text>
-            <Text style={styles.settingSub}>{target.email}</Text>
-            <View style={styles.adminManagementActions}>
-              {!target.emailVerified ? <Pressable disabled={busyAction !== null} onPress={() => void runAction('verify', async () => { const result = await verifyUser(target.id); return { title: 'Cuenta verificada', message: `${result.displayName} ya puede iniciar sesión normalmente.` }; })} style={[styles.adminActionButton, styles.adminActionVerify]}><Ionicons name="checkmark-circle-outline" size={19} color={colors.success} /><Text style={[styles.adminActionText, { color: colors.success }]}>{busyAction === 'verify' ? 'Verificando...' : 'Verificar cuenta'}</Text></Pressable> : null}
-              <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Restablecer contraseña', message: `Se cerrarán las sesiones de ${target.displayName} y se enviará una contraseña temporal a ${target.email}.`, tone: 'info', confirmLabel: 'Restablecer', cancelLabel: 'Cancelar', onConfirm: () => void runAction('reset', async () => { const result = await resetPassword(target.id); return { title: 'Contraseña restablecida', message: `La contraseña temporal fue enviada a ${result.email}.` }; }) })} style={styles.adminActionButton}><Ionicons name="key-outline" size={19} color="#7FB2FF" /><Text style={styles.adminActionText}>{busyAction === 'reset' ? 'Restableciendo...' : 'Restablecer contraseña'}</Text></Pressable>
-              <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Eliminar usuario', message: `Se eliminarán permanentemente la cuenta, billetera, saldos, tarjetas y movimientos de ${target.displayName}.`, tone: 'error', confirmLabel: 'Eliminar definitivamente', cancelLabel: 'Cancelar', onConfirm: () => void runAction('delete', async () => { const result = await deleteUser(target.id); return { title: 'Usuario eliminado', message: `La cuenta de ${result.displayName} fue eliminada.` }; }) })} style={[styles.adminActionButton, styles.adminActionDelete]}><Ionicons name="trash-outline" size={19} color={colors.danger} /><Text style={[styles.adminActionText, { color: colors.danger }]}>{busyAction === 'delete' ? 'Eliminando...' : 'Eliminar usuario'}</Text></Pressable>
-            </View>
-          </Card> : null}
-          <View style={styles.adminSectionHeader}><Text style={commonStyles.sectionTitle}>Acreditar saldo</Text><Text style={styles.settingSub}>Cuenta seleccionada: {target?.displayName}</Text></View>
-          <Text style={commonStyles.label}>Activo</Text>
-          <Pressable onPress={() => setSelectedAsset((selectedAsset + 1) % assets.length)}>
-            <Card style={styles.adminTarget}><CoinIcon asset={asset} /><View style={styles.flex}><Text style={styles.assetTitle}>{asset.name}</Text><Text style={styles.assetSymbol}>{asset.symbol}</Text></View><Ionicons name="swap-vertical" size={22} color="#958BFF" /></Card>
-          </Pressable>
-          <Text style={[commonStyles.label, { marginTop: 20 }]}>Cantidad de {asset.symbol}</Text>
-          <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={commonStyles.input} placeholder="0.00" placeholderTextColor={colors.muted} />
-          <View style={styles.adminPreview}><Text style={styles.infoLabel}>Valor estimado</Text><Text style={styles.infoValue}>{money(Number(amount || 0) * asset.priceUsd)}</Text></View>
-          <View style={styles.bottomAction}><GradientButton label={busyAction === 'fund' ? 'Acreditando saldo...' : 'Acreditar saldo'} disabled={busyAction !== null || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusyAction('fund'); const name = await submit(target.id, asset.symbol, Number(amount)); showDialog({ title: 'Saldo acreditado', message: `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`, tone: 'success' }); await reload(); } catch (error) { showDialog({ title: 'No se pudo acreditar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusyAction(null); } }} /></View>
-        </>
-      )}
-      {dialog}
-    </Screen>
-  );
+  return <Screen scroll>
+    <Header title="Gestión de usuarios" onBack={() => navigate('admin')} />
+    <Text style={commonStyles.title}>Administrar cuenta</Text>
+    <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 20 }]}>Elige un usuario desde el selector para gestionar su acceso.</Text>
+    <Text style={commonStyles.label}>Usuario</Text>
+    <Pressable onPress={() => setPickerOpen(true)} disabled={loading || users.length === 0}><Card style={styles.adminSelector}>{target ? <><View style={[styles.adminIcon, !target.emailVerified && styles.adminIconPending]}><Ionicons name={target.emailVerified ? 'person' : 'mail-unread'} size={21} color="#FFF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{target.displayName}</Text><Text style={styles.assetSymbol}>{target.email}</Text></View></> : <><View style={styles.adminSelectorPlaceholder}><Ionicons name="person-add-outline" size={23} color="#7FB2FF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{loading ? 'Cargando usuarios...' : users.length ? 'Seleccionar usuario' : 'No hay usuarios disponibles'}</Text><Text style={styles.assetSymbol}>Abre el buscador para elegir una cuenta</Text></View></>}<Ionicons name="chevron-down" size={22} color="#7FB2FF" /></Card></Pressable>
+    {target ? <Card style={styles.adminManagement}>
+      <View style={styles.adminUserNameRow}><Text style={styles.adminManagementTitle}>{target.displayName}</Text><View style={[styles.adminStatus, target.emailVerified ? styles.adminStatusVerified : styles.adminStatusPending]}><Text style={[styles.adminStatusText, { color: target.emailVerified ? colors.success : colors.warning }]}>{target.emailVerified ? 'VERIFICADA' : 'PENDIENTE'}</Text></View></View>
+      <Text style={styles.settingSub}>{target.email}</Text><Text style={styles.settingSub}>Balance total: {money(target.totalUsd)}</Text>
+      <View style={styles.adminManagementActions}>
+        {!target.emailVerified ? <Pressable disabled={busyAction !== null} onPress={() => void runAction('verify', async () => { const result = await verifyUser(target.id); return { title: 'Cuenta verificada', message: `${result.displayName} ya puede iniciar sesión normalmente.` }; })} style={[styles.adminActionButton, styles.adminActionVerify]}><Ionicons name="checkmark-circle-outline" size={19} color={colors.success} /><Text style={[styles.adminActionText, { color: colors.success }]}>{busyAction === 'verify' ? 'Verificando...' : 'Verificar cuenta'}</Text></Pressable> : null}
+        <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Restablecer contraseña', message: `Se cerrarán las sesiones de ${target.displayName} y se enviará una contraseña temporal a ${target.email}.`, tone: 'info', confirmLabel: 'Restablecer', cancelLabel: 'Cancelar', onConfirm: () => void runAction('reset', async () => { const result = await resetPassword(target.id); return { title: 'Contraseña restablecida', message: `La contraseña temporal fue enviada a ${result.email}.` }; }) })} style={styles.adminActionButton}><Ionicons name="key-outline" size={19} color="#7FB2FF" /><Text style={styles.adminActionText}>{busyAction === 'reset' ? 'Restableciendo...' : 'Restablecer contraseña'}</Text></Pressable>
+        <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Eliminar usuario', message: `Se eliminarán permanentemente la cuenta, billetera, saldos, tarjetas y movimientos de ${target.displayName}.`, tone: 'error', confirmLabel: 'Eliminar definitivamente', cancelLabel: 'Cancelar', onConfirm: () => void runAction('delete', async () => { const result = await deleteUser(target.id); return { title: 'Usuario eliminado', message: `La cuenta de ${result.displayName} fue eliminada.` }; }) })} style={[styles.adminActionButton, styles.adminActionDelete]}><Ionicons name="trash-outline" size={19} color={colors.danger} /><Text style={[styles.adminActionText, { color: colors.danger }]}>{busyAction === 'delete' ? 'Eliminando...' : 'Eliminar usuario'}</Text></Pressable>
+      </View>
+    </Card> : null}
+    <UserSelectionModal visible={pickerOpen} users={users} selectedId={selectedUserId} onSelect={(user) => setSelectedUserId(user.id)} onClose={() => setPickerOpen(false)} />
+    {dialog}
+  </Screen>;
+}
+
+const kycStatusLabel = { not_submitted: 'NO ENVIADO', pending: 'PENDIENTE', approved: 'APROBADO', rejected: 'RECHAZADO' } as const;
+const kycStatusColor = { not_submitted: colors.muted, pending: colors.warning, approved: colors.success, rejected: colors.danger } as const;
+const documentLabels = { national_id: 'Cédula / ID nacional', passport: 'Pasaporte', driver_license: 'Licencia de conducir' } as const;
+
+export function KycScreen({ navigate, load, submit }: {
+  navigate: Navigate;
+  load: () => Promise<KycProfile>;
+  submit: (profile: Omit<KycProfile, 'status'>) => Promise<KycProfile>;
+}) {
+  const [profile, setProfile] = useState<KycProfile>({ status: 'not_submitted' });
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [fullLegalName, setFullLegalName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [nationality, setNationality] = useState('');
+  const [residenceCountry, setResidenceCountry] = useState('');
+  const [residentialAddress, setResidentialAddress] = useState('');
+  const [documentType, setDocumentType] = useState<'national_id' | 'passport' | 'driver_license'>('national_id');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [documentReference, setDocumentReference] = useState('');
+  const { showDialog, dialog } = useWalletDialog();
+  const hydrate = (next: KycProfile) => {
+    setProfile(next); setFullLegalName(next.fullLegalName || ''); setBirthDate(next.birthDate || ''); setNationality(next.nationality || '');
+    setResidenceCountry(next.residenceCountry || ''); setResidentialAddress(next.residentialAddress || ''); setDocumentType(next.documentType || 'national_id');
+    setDocumentNumber(next.documentNumber || ''); setDocumentReference(next.documentReference || '');
+  };
+  useEffect(() => { void load().then(hydrate).catch((error) => showDialog({ title: 'No se pudo cargar tu KYC', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' })).finally(() => setLoading(false)); }, []);
+  const locked = profile.status === 'pending' || profile.status === 'approved';
+  const send = async () => {
+    if (![fullLegalName, birthDate, nationality, residenceCountry, residentialAddress, documentNumber, documentReference].every((value) => value.trim())) {
+      showDialog({ title: 'Completa la información', message: 'Todos los campos son necesarios para enviar la verificación.', tone: 'info' }); return;
+    }
+    try { setBusy(true); hydrate(await submit({ fullLegalName, birthDate, nationality, residenceCountry, residentialAddress, documentType, documentNumber, documentReference, selfieCheck: true })); showDialog({ title: 'Solicitud enviada', message: 'Administración revisará tu identidad y documentación.', tone: 'success' }); }
+    catch (error) { showDialog({ title: 'No se pudo enviar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+  return <Screen scroll>
+    <Header title="Verificación de identidad" onBack={() => navigate('profile')} right={<Ionicons name="shield-checkmark" size={23} color="#58D7B7" />} />
+    <Card style={styles.kycHero}><LinearGradient colors={['#123C3B', '#14263C']} style={styles.kycHeroIcon}><Ionicons name="finger-print" size={34} color="#69E0C4" /></LinearGradient><View style={styles.flex}><Text style={styles.adminHubTitle}>Conoce a tu cliente</Text><Text style={styles.adminHubBody}>Tus datos permiten validar identidad y reducir fraude.</Text></View><View style={[styles.kycBadge, { backgroundColor: `${kycStatusColor[profile.status]}20` }]}><Text style={[styles.kycBadgeText, { color: kycStatusColor[profile.status] }]}>{loading ? 'CARGANDO' : kycStatusLabel[profile.status]}</Text></View></Card>
+    {profile.status === 'rejected' && profile.reviewNote ? <Card style={styles.kycNotice}><Ionicons name="alert-circle-outline" size={22} color={colors.danger} /><View style={styles.flex}><Text style={styles.settingTitle}>Solicitud observada</Text><Text style={styles.settingSub}>{profile.reviewNote}</Text></View></Card> : null}
+    {profile.status === 'approved' ? <Card style={styles.kycApproved}><Ionicons name="checkmark-circle" size={48} color={colors.success} /><Text style={styles.emptyTitle}>Identidad verificada</Text><Text style={styles.emptyBody}>La revisión KYC fue aprobada con nivel de riesgo {profile.riskLevel === 'low' ? 'bajo' : profile.riskLevel === 'medium' ? 'medio' : 'alto'}.</Text></Card> : <View style={styles.kycForm}>
+      <Text style={commonStyles.label}>Nombre legal completo</Text><TextInput editable={!locked} value={fullLegalName} onChangeText={setFullLegalName} style={commonStyles.input} placeholder="Como aparece en tu documento" placeholderTextColor={colors.muted} />
+      <Text style={commonStyles.label}>Fecha de nacimiento</Text><TextInput editable={!locked} value={birthDate} onChangeText={setBirthDate} style={commonStyles.input} placeholder="AAAA-MM-DD" placeholderTextColor={colors.muted} keyboardType="numbers-and-punctuation" />
+      <View style={styles.expiryRow}><View style={styles.flex}><Text style={commonStyles.label}>Nacionalidad</Text><TextInput editable={!locked} value={nationality} onChangeText={setNationality} style={commonStyles.input} placeholder="Ecuatoriana" placeholderTextColor={colors.muted} /></View><View style={styles.flex}><Text style={commonStyles.label}>Residencia</Text><TextInput editable={!locked} value={residenceCountry} onChangeText={setResidenceCountry} style={commonStyles.input} placeholder="Ecuador" placeholderTextColor={colors.muted} /></View></View>
+      <Text style={commonStyles.label}>Dirección residencial</Text><TextInput editable={!locked} value={residentialAddress} onChangeText={setResidentialAddress} style={commonStyles.input} placeholder="Ciudad, calle y número" placeholderTextColor={colors.muted} />
+      <Text style={commonStyles.label}>Tipo de documento</Text><View style={styles.kycChoiceRow}>{(Object.keys(documentLabels) as Array<keyof typeof documentLabels>).map((type) => <Pressable disabled={locked} key={type} onPress={() => setDocumentType(type)} style={[styles.kycChoice, documentType === type && styles.kycChoiceActive]}><Text style={[styles.kycChoiceText, documentType === type && { color: '#FFF' }]}>{type === 'national_id' ? 'Cédula' : type === 'passport' ? 'Pasaporte' : 'Licencia'}</Text></Pressable>)}</View>
+      <Text style={commonStyles.label}>Número de documento</Text><TextInput editable={!locked} value={documentNumber} onChangeText={setDocumentNumber} style={commonStyles.input} placeholder="Número del documento" placeholderTextColor={colors.muted} autoCapitalize="characters" />
+      <Text style={commonStyles.label}>Referencia del documento</Text><TextInput editable={!locked} value={documentReference} onChangeText={setDocumentReference} style={commonStyles.input} placeholder="Ej. ID-frente-2026" placeholderTextColor={colors.muted} />
+      <Card style={styles.kycPrivacy}><Ionicons name="lock-closed-outline" size={20} color="#7FB2FF" /><Text style={styles.kycPrivacyText}>La captura documental y comprobación biométrica se simulan internamente por ahora. No existe consulta con una entidad externa.</Text></Card>
+      <GradientButton disabled={locked || busy || loading} label={profile.status === 'pending' ? 'En revisión administrativa' : busy ? 'Enviando solicitud...' : profile.status === 'rejected' ? 'Volver a enviar' : 'Enviar para revisión'} onPress={() => void send()} />
+    </View>}
+    {dialog}
+  </Screen>;
+}
+
+type AdminKycItem = KycProfile & { id: number; userId: number; displayName: string; email: string };
+
+export function AdminKycScreen({ navigate, loadRequests, review }: {
+  navigate: Navigate;
+  loadRequests: () => Promise<KycProfile[]>;
+  review: (userId: number, body: { status: 'approved' | 'rejected'; riskLevel: 'low' | 'medium' | 'high'; reviewNote: string }) => Promise<{ displayName: string; status: string }>;
+}) {
+  const [requests, setRequests] = useState<AdminKycItem[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [riskLevel, setRiskLevel] = useState<'low' | 'medium' | 'high'>('low');
+  const [reviewNote, setReviewNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const { showDialog, dialog } = useWalletDialog();
+  const selected = requests.find((item) => item.userId === selectedId);
+  const reload = async () => { try { const list = await loadRequests(); setRequests(list.filter((item) => item.userId).map((item) => ({ ...item, id: item.userId!, userId: item.userId!, displayName: item.displayName || '', email: item.email || '' }))); } catch (error) { showDialog({ title: 'No se pudo cargar KYC', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } };
+  useEffect(() => { void reload(); }, []);
+  const decide = async (status: 'approved' | 'rejected') => {
+    if (!selected) return;
+    if (status === 'rejected' && reviewNote.trim().length < 5) { showDialog({ title: 'Indica una observación', message: 'Explica qué debe corregir el usuario antes de rechazar.', tone: 'info' }); return; }
+    try { setBusy(true); const result = await review(selected.userId, { status, riskLevel, reviewNote }); await reload(); showDialog({ title: status === 'approved' ? 'KYC aprobado' : 'KYC rechazado', message: `La decisión sobre ${result.displayName} fue registrada y enviada por correo.`, tone: 'success' }); }
+    catch (error) { showDialog({ title: 'No se pudo registrar la decisión', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    finally { setBusy(false); }
+  };
+  return <Screen scroll>
+    <Header title="Revisión KYC" onBack={() => navigate('admin')} right={<Ionicons name="finger-print" size={25} color="#58D7B7" />} />
+    <Text style={commonStyles.title}>Solicitudes de identidad</Text><Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 20 }]}>Revisa la información, clasifica el riesgo y registra una decisión.</Text>
+    <Text style={commonStyles.label}>Solicitud</Text><Pressable onPress={() => setPickerOpen(true)} disabled={!requests.length}><Card style={styles.adminSelector}>{selected ? <><View style={[styles.adminIcon, { backgroundColor: kycStatusColor[selected.status] }]}><Ionicons name="id-card-outline" size={22} color="#FFF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{selected.displayName}</Text><Text style={styles.assetSymbol}>{selected.email}</Text></View></> : <><View style={styles.adminSelectorPlaceholder}><Ionicons name="documents-outline" size={23} color="#69E0C4" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{requests.length ? 'Seleccionar solicitud' : 'No hay solicitudes KYC'}</Text><Text style={styles.assetSymbol}>Busca por nombre, correo o documento</Text></View></>}<Ionicons name="chevron-down" size={22} color="#69E0C4" /></Card></Pressable>
+    {selected ? <Card style={styles.kycReviewCard}><View style={styles.adminUserNameRow}><Text style={styles.adminManagementTitle}>{selected.fullLegalName}</Text><View style={[styles.kycBadge, { backgroundColor: `${kycStatusColor[selected.status]}20` }]}><Text style={[styles.kycBadgeText, { color: kycStatusColor[selected.status] }]}>{kycStatusLabel[selected.status]}</Text></View></View>
+      <View style={styles.kycDetails}>{[['Nacimiento', selected.birthDate], ['Nacionalidad', selected.nationality], ['Residencia', selected.residenceCountry], ['Dirección', selected.residentialAddress], ['Documento', documentLabels[selected.documentType || 'national_id']], ['Número', selected.documentNumber], ['Referencia', selected.documentReference], ['Biometría interna', selected.selfieCheck ? 'Completada' : 'Pendiente']].map(([label, value]) => <View key={label} style={styles.infoRow}><Text style={styles.infoLabel}>{label}</Text><Text style={[styles.infoValue, styles.kycDetailValue]}>{value || '—'}</Text></View>)}</View>
+      {selected.status === 'pending' ? <><Text style={[commonStyles.label, { marginTop: 18 }]}>Nivel de riesgo</Text><View style={styles.kycChoiceRow}>{(['low', 'medium', 'high'] as const).map((level) => <Pressable key={level} onPress={() => setRiskLevel(level)} style={[styles.kycChoice, riskLevel === level && styles.kycChoiceActive]}><Text style={[styles.kycChoiceText, riskLevel === level && { color: '#FFF' }]}>{level === 'low' ? 'Bajo' : level === 'medium' ? 'Medio' : 'Alto'}</Text></Pressable>)}</View><Text style={commonStyles.label}>Observación</Text><TextInput value={reviewNote} onChangeText={setReviewNote} style={[commonStyles.input, styles.kycNote]} placeholder="Opcional al aprobar; obligatoria al rechazar" placeholderTextColor={colors.muted} multiline /><View style={styles.expiryRow}><View style={styles.flex}><OutlineButton label="Rechazar" disabled={busy} onPress={() => void decide('rejected')} /></View><View style={styles.flex}><GradientButton label={busy ? 'Procesando...' : 'Aprobar KYC'} disabled={busy} onPress={() => void decide('approved')} /></View></View></> : <Card style={styles.kycNotice}><Ionicons name="information-circle-outline" size={22} color={kycStatusColor[selected.status]} /><Text style={styles.kycPrivacyText}>{selected.reviewNote || `Solicitud ${kycStatusLabel[selected.status].toLowerCase()} con riesgo ${selected.riskLevel || 'sin clasificar'}.`}</Text></Card>}
+    </Card> : null}
+    <SelectionModal visible={pickerOpen} title="Seleccionar solicitud KYC" placeholder="Buscar nombre, correo o documento" items={requests} selectedId={selectedId} getSearchText={(item) => `${item.displayName} ${item.email} ${item.documentNumber || ''}`} onSelect={(item) => { setSelectedId(item.userId); setRiskLevel(item.riskLevel || 'low'); setReviewNote(item.reviewNote || ''); }} onClose={() => setPickerOpen(false)} renderItem={(item, active) => <><View style={[styles.adminIcon, { backgroundColor: kycStatusColor[item.status] }]}><Ionicons name="id-card-outline" size={20} color="#FFF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{item.displayName}</Text><Text style={styles.assetSymbol}>{item.email}</Text><Text style={[styles.settingSub, { color: kycStatusColor[item.status] }]}>{kycStatusLabel[item.status]} · {item.documentNumber || 'Sin documento'}</Text></View><Ionicons name={active ? 'checkmark-circle' : 'chevron-forward'} size={22} color={active ? '#69E0C4' : colors.muted} /></>} />
+    {dialog}
+  </Screen>;
+}
+
+export function AdminFundScreen({ assets, navigate, loadUsers, submit }: { assets: Asset[]; navigate: Navigate; loadUsers: () => Promise<AdminUser[]>; submit: (userId: number, symbol: string, amount: number) => Promise<string> }) {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(assets[0]?.id ?? null);
+  const [userPickerOpen, setUserPickerOpen] = useState(false);
+  const [assetPickerOpen, setAssetPickerOpen] = useState(false);
+  const [amount, setAmount] = useState('100');
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const { showDialog, dialog } = useWalletDialog();
+  const target = users.find((user) => user.id === selectedUserId);
+  const asset = assets.find((item) => item.id === selectedAssetId) ?? assets[0]!;
+  const reload = async () => {
+    try { const loaded = (await loadUsers()).filter((user) => user.role !== 'admin'); setUsers(loaded); setSelectedUserId((current) => loaded.some((user) => user.id === current) ? current : null); }
+    catch (error) { showDialog({ title: 'No se pudieron cargar las cuentas', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { void reload(); }, []);
+  return <Screen scroll>
+    <Header title="Acreditar saldo" onBack={() => navigate('admin')} />
+    <Text style={commonStyles.title}>Transferir a cartera</Text>
+    <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 22 }]}>Selecciona el destinatario, el activo y el monto de la acreditación ficticia.</Text>
+    <Text style={commonStyles.label}>Cuenta de destino</Text>
+    <Pressable onPress={() => setUserPickerOpen(true)} disabled={loading || users.length === 0}><Card style={styles.adminSelector}>{target ? <><View style={styles.adminIcon}><Ionicons name="person" size={21} color="#FFF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{target.displayName}</Text><Text style={styles.assetSymbol}>{target.email}</Text><Text style={styles.settingSub}>Balance: {money(target.totalUsd)}</Text></View></> : <><View style={styles.adminSelectorPlaceholder}><Ionicons name="people-outline" size={23} color="#7FB2FF" /></View><View style={styles.flex}><Text style={styles.assetTitle}>{loading ? 'Cargando usuarios...' : users.length ? 'Seleccionar usuario' : 'No hay usuarios disponibles'}</Text><Text style={styles.assetSymbol}>Busca la cuenta que recibirá el saldo</Text></View></>}<Ionicons name="chevron-down" size={22} color="#7FB2FF" /></Card></Pressable>
+    <Text style={[commonStyles.label, { marginTop: 20 }]}>Activo o moneda</Text>
+    <Pressable onPress={() => setAssetPickerOpen(true)}><Card style={styles.adminSelector}><CoinIcon asset={asset} /><View style={styles.flex}><Text style={styles.assetTitle}>{asset.name}</Text><Text style={styles.assetSymbol}>{asset.symbol} · {asset.network}</Text></View><Ionicons name="chevron-down" size={22} color="#7FB2FF" /></Card></Pressable>
+    <Text style={[commonStyles.label, { marginTop: 20 }]}>Cantidad de {asset.symbol}</Text>
+    <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={commonStyles.input} placeholder="0.00" placeholderTextColor={colors.muted} />
+    <View style={styles.adminPreview}><Text style={styles.infoLabel}>Valor estimado</Text><Text style={styles.infoValue}>{money(Number(amount || 0) * asset.priceUsd)}</Text></View>
+    <View style={styles.bottomAction}><GradientButton label={busy ? 'Acreditando saldo...' : 'Confirmar acreditación'} disabled={busy || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusy(true); const name = await submit(target.id, asset.symbol, Number(amount)); showDialog({ title: 'Saldo acreditado', message: `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`, tone: 'success' }); await reload(); } catch (error) { showDialog({ title: 'No se pudo acreditar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusy(false); } }} /></View>
+    <UserSelectionModal visible={userPickerOpen} users={users} selectedId={selectedUserId} onSelect={(user) => setSelectedUserId(user.id)} onClose={() => setUserPickerOpen(false)} />
+    <SelectionModal visible={assetPickerOpen} title="Seleccionar activo" placeholder="Buscar moneda, símbolo o red" items={assets} selectedId={asset.id} getSearchText={(item) => `${item.name} ${item.symbol} ${item.network}`} onSelect={(item) => setSelectedAssetId(item.id)} onClose={() => setAssetPickerOpen(false)} renderItem={(item, selected) => <><CoinIcon asset={item} /><View style={styles.flex}><Text style={styles.assetTitle}>{item.name}</Text><Text style={styles.assetSymbol}>{item.symbol} · {item.network}</Text><Text style={styles.settingSub}>Precio: {money(item.priceUsd)}</Text></View><Ionicons name={selected ? 'checkmark-circle' : 'chevron-forward'} size={22} color={selected ? '#6FA8FF' : colors.muted} /></>} />
+    {dialog}
+  </Screen>;
 }
 
 function VirtualCard({ card, compact = false }: { card: PaymentCard; compact?: boolean }) {
@@ -1144,6 +1277,13 @@ const styles = StyleSheet.create({
   adminEntry: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18, borderColor: '#655DFF' },
   adminIcon: { width: 45, height: 45, borderRadius: 15, backgroundColor: '#625EFF', alignItems: 'center', justifyContent: 'center' },
   adminIconPending: { backgroundColor: '#8A6627' },
+  adminHubList: { gap: 14 },
+  adminHubCard: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 15, padding: 17 },
+  adminHubIcon: { width: 56, height: 56, borderRadius: 19, alignItems: 'center', justifyContent: 'center', ...shadow },
+  adminHubTitle: { color: colors.text, fontSize: 17, fontWeight: '800', marginBottom: 6 },
+  adminHubBody: { color: colors.muted, fontSize: 13, lineHeight: 18 },
+  adminSelector: { minHeight: 78, flexDirection: 'row', alignItems: 'center', gap: 13, padding: 14 },
+  adminSelectorPlaceholder: { width: 45, height: 45, borderRadius: 15, backgroundColor: '#12233A', borderWidth: 1, borderColor: '#294567', alignItems: 'center', justifyContent: 'center' },
   adminSearch: { minHeight: 56, borderRadius: 17, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, marginBottom: 16 },
   adminSearchInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 0 },
   adminListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -1164,9 +1304,35 @@ const styles = StyleSheet.create({
   adminActionDelete: { backgroundColor: 'rgba(255,86,112,.07)', borderColor: 'rgba(255,86,112,.3)' },
   adminActionText: { color: '#7FB2FF', fontSize: 13, fontWeight: '800' },
   adminSectionHeader: { marginTop: 28, marginBottom: 15, gap: 5 },
+  selectionBackdrop: { flex: 1, backgroundColor: 'rgba(2,5,10,.72)', justifyContent: 'flex-end' },
+  selectionSheet: { maxHeight: '78%', minHeight: 360, backgroundColor: '#0C1420', borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: '#27384E', paddingHorizontal: 18, paddingTop: 10, paddingBottom: 26 },
+  selectionHandle: { width: 48, height: 5, borderRadius: 3, backgroundColor: '#34445B', alignSelf: 'center', marginBottom: 14 },
+  selectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  selectionTitle: { color: colors.text, fontSize: 21, fontWeight: '800' },
+  selectionList: { flexGrow: 0 },
+  selectionListContent: { gap: 9, paddingBottom: 12 },
+  selectionOption: { minHeight: 74, borderRadius: 17, backgroundColor: '#111C2A', borderWidth: 1, borderColor: '#26364A', flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 },
+  selectionOptionSelected: { borderColor: '#4A8FFF', backgroundColor: '#14253A' },
   adminTarget: { flexDirection: 'row', alignItems: 'center', gap: 13 },
   adminEmpty: { color: colors.muted, textAlign: 'center', paddingVertical: 24 },
   adminPreview: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
+  kycHero: { minHeight: 112, flexDirection: 'row', alignItems: 'center', gap: 13, marginBottom: 18, padding: 15 },
+  kycHeroIcon: { width: 58, height: 58, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  kycBadge: { paddingHorizontal: 8, paddingVertical: 5, borderRadius: 9, alignSelf: 'flex-start' },
+  kycBadgeText: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6 },
+  kycNotice: { marginTop: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: 14 },
+  kycApproved: { alignItems: 'center', paddingVertical: 32, marginTop: 6 },
+  kycForm: { gap: 10 },
+  kycChoiceRow: { flexDirection: 'row', gap: 8, marginBottom: 5 },
+  kycChoice: { flex: 1, minHeight: 43, borderRadius: 13, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  kycChoiceActive: { backgroundColor: '#246F65', borderColor: '#58D7B7' },
+  kycChoiceText: { color: colors.muted, fontSize: 11.5, fontWeight: '800', textAlign: 'center' },
+  kycPrivacy: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 13, marginVertical: 4 },
+  kycPrivacyText: { color: colors.muted, fontSize: 12, lineHeight: 18, flex: 1 },
+  kycReviewCard: { marginTop: 16, padding: 15 },
+  kycDetails: { marginTop: 12 },
+  kycDetailValue: { maxWidth: '58%', textAlign: 'right' },
+  kycNote: { minHeight: 82, textAlignVertical: 'top', paddingTop: 14 },
   settingRow: { minHeight: 72, flexDirection: 'row', alignItems: 'center', gap: 15 },
   settingBorder: { borderBottomWidth: 1, borderBottomColor: '#252C38' },
   settingTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },

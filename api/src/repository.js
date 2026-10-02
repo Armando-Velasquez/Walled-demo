@@ -11,6 +11,7 @@ import {
   queueMail,
   transactionMessage,
   verificationMessage,
+  kycDecisionMessage,
 } from './mailer.js';
 
 function mapAsset(row) {
@@ -333,6 +334,69 @@ export async function createBuy({ walletId, symbol, usdAmount, cardId }) {
 
 export async function updateOnboarding(walletId, completed) {
   await pool.query('UPDATE wallets SET onboarding_completed = ? WHERE id = ?', [completed ? 1 : 0, walletId]);
+}
+
+function mapKyc(row) {
+  if (!row) return { status: 'not_submitted' };
+  return {
+    userId: row.user_id,
+    displayName: row.display_name,
+    email: row.email,
+    status: row.status,
+    fullLegalName: row.full_legal_name || '',
+    birthDate: row.birth_date ? new Date(row.birth_date).toISOString().slice(0, 10) : '',
+    nationality: row.nationality || '',
+    residenceCountry: row.residence_country || '',
+    residentialAddress: row.residential_address || '',
+    documentType: row.document_type || 'national_id',
+    documentNumber: row.document_number || '',
+    documentReference: row.document_reference || '',
+    selfieCheck: Boolean(row.selfie_check),
+    riskLevel: row.risk_level || null,
+    reviewNote: row.review_note || '',
+    submittedAt: row.submitted_at,
+    reviewedAt: row.reviewed_at,
+  };
+}
+
+export async function getKycProfile(userId) {
+  const [rows] = await pool.query('SELECT * FROM kyc_profiles WHERE user_id = ?', [userId]);
+  return mapKyc(rows[0]);
+}
+
+export async function submitKycProfile(userId, profile) {
+  await pool.query(`INSERT INTO kyc_profiles
+    (user_id, status, full_legal_name, birth_date, nationality, residence_country, residential_address,
+     document_type, document_number, document_reference, selfie_check, risk_level, review_note, submitted_at, reviewed_at, reviewed_by)
+    VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, TRUE, NULL, NULL, NOW(), NULL, NULL)
+    ON DUPLICATE KEY UPDATE status='pending', full_legal_name=VALUES(full_legal_name), birth_date=VALUES(birth_date),
+      nationality=VALUES(nationality), residence_country=VALUES(residence_country), residential_address=VALUES(residential_address),
+      document_type=VALUES(document_type), document_number=VALUES(document_number), document_reference=VALUES(document_reference),
+      selfie_check=TRUE, risk_level=NULL, review_note=NULL, submitted_at=NOW(), reviewed_at=NULL, reviewed_by=NULL`,
+  [userId, profile.fullLegalName, profile.birthDate, profile.nationality, profile.residenceCountry,
+    profile.residentialAddress, profile.documentType, profile.documentNumber, profile.documentReference]);
+  return getKycProfile(userId);
+}
+
+export async function listKycForAdmin() {
+  const [rows] = await pool.query(`SELECT k.*, u.display_name, u.email FROM kyc_profiles k
+    JOIN users u ON u.id = k.user_id WHERE u.role <> 'admin' ORDER BY
+    FIELD(k.status, 'pending', 'rejected', 'approved', 'not_submitted'), k.submitted_at DESC`);
+  return rows.map(mapKyc);
+}
+
+export async function reviewKycForAdmin({ userId, reviewerId, status, riskLevel, reviewNote }) {
+  return withTransaction(async (connection) => {
+    const [rows] = await connection.query(`SELECT k.*, u.display_name, u.email FROM kyc_profiles k
+      JOIN users u ON u.id = k.user_id WHERE k.user_id = ? FOR UPDATE`, [userId]);
+    const profile = rows[0];
+    if (!profile) throw Object.assign(new Error('Solicitud KYC no encontrada'), { status: 404 });
+    if (profile.status !== 'pending') throw Object.assign(new Error('Esta solicitud ya no está pendiente'), { status: 409 });
+    await connection.query(`UPDATE kyc_profiles SET status=?, risk_level=?, review_note=?, reviewed_at=NOW(), reviewed_by=? WHERE user_id=?`,
+      [status, riskLevel, reviewNote || null, reviewerId, userId]);
+    await queueMail(connection, kycDecisionMessage({ email: profile.email, displayName: profile.display_name, status, note: reviewNote }));
+    return { displayName: profile.display_name, status };
+  });
 }
 
 export async function listUsersForAdmin() {

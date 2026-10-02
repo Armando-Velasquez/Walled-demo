@@ -83,6 +83,17 @@ export function accountVerifiedMessage({ email, displayName }) {
   };
 }
 
+export function kycDecisionMessage({ email, displayName, status, note }) {
+  const approved = status === 'approved';
+  const state = approved ? 'Aprobada' : 'Requiere correcciones';
+  return {
+    to: email,
+    subject: `Actualización de tu verificación de identidad en Wallet`,
+    text: `Hola ${displayName}. Tu verificación de identidad fue revisada. Estado: ${state}.${note ? ` Observación: ${note}` : ''}`,
+    html: emailLayout('Verificación de identidad revisada', `Hola ${displayName}, administración terminó de revisar tu solicitud KYC.`, [['Estado', state], ...(note ? [['Observación', note]] : [])], approved ? 'Tu identidad figura como verificada en Wallet.' : 'Revisa la observación y vuelve a enviar tus datos desde tu perfil.'),
+  };
+}
+
 export function loginMessage({ email, displayName, ip, userAgent, occurredAt }) {
   return {
     to: email,

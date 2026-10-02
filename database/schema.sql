@@ -118,6 +118,30 @@ CREATE TABLE IF NOT EXISTS email_verification_tokens (
 CREATE INDEX IF NOT EXISTS idx_verification_user ON email_verification_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_verification_expires ON email_verification_tokens(expires_at);
 
+CREATE TABLE IF NOT EXISTS kyc_profiles (
+  user_id BIGINT UNSIGNED PRIMARY KEY,
+  status ENUM('not_submitted','pending','approved','rejected') NOT NULL DEFAULT 'not_submitted',
+  full_legal_name VARCHAR(120) NULL,
+  birth_date DATE NULL,
+  nationality VARCHAR(80) NULL,
+  residence_country VARCHAR(80) NULL,
+  residential_address VARCHAR(220) NULL,
+  document_type ENUM('national_id','passport','driver_license') NULL,
+  document_number VARCHAR(80) NULL,
+  document_reference VARCHAR(160) NULL,
+  selfie_check BOOLEAN NOT NULL DEFAULT FALSE,
+  risk_level ENUM('low','medium','high') NULL,
+  review_note VARCHAR(500) NULL,
+  submitted_at DATETIME NULL,
+  reviewed_at DATETIME NULL,
+  reviewed_by BIGINT UNSIGNED NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_kyc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_kyc_reviewer FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_kyc_status ON kyc_profiles(status, submitted_at);
+
 CREATE TABLE IF NOT EXISTS email_outbox (
   id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
   to_email VARCHAR(160) NOT NULL,

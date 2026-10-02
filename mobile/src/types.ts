@@ -76,6 +76,28 @@ export type AdminUser = User & {
   createdAt: string;
 };
 
+export type KycStatus = 'not_submitted' | 'pending' | 'approved' | 'rejected';
+
+export type KycProfile = {
+  userId?: number;
+  displayName?: string;
+  email?: string;
+  status: KycStatus;
+  fullLegalName?: string;
+  birthDate?: string;
+  nationality?: string;
+  residenceCountry?: string;
+  residentialAddress?: string;
+  documentType?: 'national_id' | 'passport' | 'driver_license';
+  documentNumber?: string;
+  documentReference?: string;
+  selfieCheck?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high' | null;
+  reviewNote?: string;
+  submittedAt?: string | null;
+  reviewedAt?: string | null;
+};
+
 export type AuthResponse = {
   token: string;
   expiresAt: string;
@@ -108,5 +130,9 @@ export type AppScreen =
   | 'activity'
   | 'profile'
   | 'admin'
+  | 'adminUsers'
+  | 'adminFund'
+  | 'adminKyc'
+  | 'kyc'
   | 'cards'
   | 'buy';

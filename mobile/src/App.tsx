@@ -5,7 +5,10 @@ import { Loading } from './components';
 import { ApiRequestError, loadWallet, restoreSession, walletApi } from './api';
 import {
   ActivityScreen,
+  AdminFundScreen,
+  AdminKycScreen,
   AdminScreen,
+  AdminUsersScreen,
   AssetScreen,
   AuthScreen,
   BuyScreen,
@@ -13,6 +16,7 @@ import {
   CreateWalletScreen,
   ExploreScreen,
   HomeScreen,
+  KycScreen,
   OnboardingScreen,
   PinScreen,
   ProfileScreen,
@@ -145,7 +149,11 @@ export default function App() {
       case 'explore': return <ExploreScreen assets={data.assets} dapps={data.dapps} navigate={navigate} />;
       case 'activity': return <ActivityScreen transactions={data.transactions} navigate={navigate} />;
       case 'profile': return <ProfileScreen data={data} navigate={navigate} logout={logout} />;
-      case 'admin': return <AdminScreen assets={data.assets} navigate={navigate} loadUsers={async () => (await walletApi.adminUsers()).users} submit={async (userId, symbol, amount) => (await walletApi.adminFund({ userId, symbol, amount })).recipientName} verifyUser={walletApi.adminVerifyUser} resetPassword={walletApi.adminResetPassword} deleteUser={walletApi.adminDeleteUser} />;
+      case 'admin': return <AdminScreen navigate={navigate} />;
+      case 'adminUsers': return <AdminUsersScreen navigate={navigate} loadUsers={async () => (await walletApi.adminUsers()).users} verifyUser={walletApi.adminVerifyUser} resetPassword={walletApi.adminResetPassword} deleteUser={walletApi.adminDeleteUser} />;
+      case 'adminFund': return <AdminFundScreen assets={data.assets} navigate={navigate} loadUsers={async () => (await walletApi.adminUsers()).users} submit={async (userId, symbol, amount) => (await walletApi.adminFund({ userId, symbol, amount })).recipientName} />;
+      case 'adminKyc': return <AdminKycScreen navigate={navigate} loadRequests={async () => (await walletApi.adminKyc()).requests} review={walletApi.adminReviewKyc} />;
+      case 'kyc': return <KycScreen navigate={navigate} load={async () => (await walletApi.getKyc()).kyc} submit={async (profile) => (await walletApi.submitKyc(profile)).kyc} />;
       case 'cards': return <CardsScreen data={data} navigate={navigate} addCard={addCard} setDefault={setDefaultCard} />;
       case 'buy': return <BuyScreen assets={data.assets} cards={data.cards} navigate={navigate} submit={buy} />;
       default: return <HomeScreen data={data} navigate={navigate} offline={false} />;

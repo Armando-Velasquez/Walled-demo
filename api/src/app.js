@@ -13,13 +13,17 @@ import {
   deleteUserForAdmin,
   getAsset,
   getBootstrap,
+  getKycProfile,
   fundUser,
   listUsersForAdmin,
+  listKycForAdmin,
   loginUser,
   registerUser,
+  reviewKycForAdmin,
   resetUserPasswordForAdmin,
   resendEmailVerification,
   setDefaultPaymentCard,
+  submitKycProfile,
   updateOnboarding,
   verifyUserForAdmin,
   verifyEmail,
@@ -206,8 +210,43 @@ app.put('/api/v1/onboarding', asyncRoute(async (request, response) => {
   response.json({ ok: true });
 }));
 
+app.get('/api/v1/kyc', asyncRoute(async (request, response) => {
+  response.json({ kyc: await getKycProfile(request.auth.user_id) });
+}));
+
+app.post('/api/v1/kyc', asyncRoute(async (request, response) => {
+  const fullLegalName = requireText(request.body.fullLegalName, 'Nombre legal', 3);
+  const birthDate = requireText(request.body.birthDate, 'Fecha de nacimiento', 10);
+  const nationality = requireText(request.body.nationality, 'Nacionalidad', 2);
+  const residenceCountry = requireText(request.body.residenceCountry, 'País de residencia', 2);
+  const residentialAddress = requireText(request.body.residentialAddress, 'Dirección', 8);
+  const documentType = String(request.body.documentType || '');
+  const documentNumber = requireText(request.body.documentNumber, 'Número de documento', 5);
+  const documentReference = requireText(request.body.documentReference, 'Referencia del documento', 3);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(birthDate) || Number.isNaN(Date.parse(`${birthDate}T00:00:00Z`))) return response.status(400).json({ message: 'Usa una fecha válida con formato AAAA-MM-DD' });
+  const age = (Date.now() - Date.parse(`${birthDate}T00:00:00Z`)) / 31_557_600_000;
+  if (age < 18 || age > 120) return response.status(400).json({ message: 'La persona debe ser mayor de edad' });
+  if (!['national_id', 'passport', 'driver_license'].includes(documentType)) return response.status(400).json({ message: 'Tipo de documento no válido' });
+  response.status(201).json({ kyc: await submitKycProfile(request.auth.user_id, { fullLegalName, birthDate, nationality, residenceCountry, residentialAddress, documentType, documentNumber, documentReference }) });
+}));
+
 app.get('/api/v1/admin/users', requireAdmin, asyncRoute(async (_request, response) => {
   response.json({ users: await listUsersForAdmin() });
+}));
+
+app.get('/api/v1/admin/kyc', requireAdmin, asyncRoute(async (_request, response) => {
+  response.json({ requests: await listKycForAdmin() });
+}));
+
+app.post('/api/v1/admin/kyc/:id/review', requireAdmin, asyncRoute(async (request, response) => {
+  const userId = requirePositiveNumber(request.params.id, 'El usuario');
+  const status = String(request.body.status || '');
+  const riskLevel = String(request.body.riskLevel || '');
+  const reviewNote = String(request.body.reviewNote || '').trim().slice(0, 500);
+  if (!['approved', 'rejected'].includes(status)) return response.status(400).json({ message: 'Decisión KYC no válida' });
+  if (!['low', 'medium', 'high'].includes(riskLevel)) return response.status(400).json({ message: 'Selecciona un nivel de riesgo' });
+  if (status === 'rejected' && reviewNote.length < 5) return response.status(400).json({ message: 'Indica el motivo del rechazo' });
+  response.json(await reviewKycForAdmin({ userId, reviewerId: request.auth.user_id, status, riskLevel, reviewNote }));
 }));
 
 app.post('/api/v1/admin/fund', requireAdmin, asyncRoute(async (request, response) => {
