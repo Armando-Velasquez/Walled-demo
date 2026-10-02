@@ -65,6 +65,24 @@ export function verificationMessage({ email, displayName, code }) {
   };
 }
 
+export function passwordResetMessage({ email, displayName, temporaryPassword }) {
+  return {
+    to: email,
+    subject: 'Tu contraseña temporal de Wallet',
+    text: `Hola ${displayName}. Administración restableció tu acceso. Tu contraseña temporal es ${temporaryPassword}. Inicia sesión y cámbiala cuanto antes.`,
+    html: emailLayout('Contraseña restablecida', `Hola ${displayName}, administración generó una contraseña temporal para recuperar tu acceso.`, [['Contraseña temporal', temporaryPassword]], 'Inicia sesión con esta clave y cámbiala cuanto antes. Si no solicitaste el cambio, contacta al administrador.'),
+  };
+}
+
+export function accountVerifiedMessage({ email, displayName }) {
+  return {
+    to: email,
+    subject: 'Tu cuenta de Wallet fue verificada',
+    text: `Hola ${displayName}. Administración verificó tu cuenta de Wallet. Ya puedes iniciar sesión normalmente.`,
+    html: emailLayout('Cuenta verificada', `Hola ${displayName}, tu correo fue validado por administración y tu cuenta ya está activa.`, [['Estado', 'Verificada'], ['Acceso', 'Habilitado']], 'Ya puedes iniciar sesión en Wallet con tus credenciales.'),
+  };
+}
+
 export function loginMessage({ email, displayName, ip, userAgent, occurredAt }) {
   return {
     to: email,

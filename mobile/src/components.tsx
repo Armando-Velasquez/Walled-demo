@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
   type ViewStyle,
 } from 'react-native';
 import { colors, radii, shadow } from './theme';
@@ -52,7 +53,7 @@ export function Screen({ children, scroll = false, style }: PropsWithChildren<{ 
 }
 
 type DialogTone = 'success' | 'error' | 'info';
-type DialogState = { title: string; message: string; tone?: DialogTone; confirmLabel?: string; onConfirm?: () => void } | null;
+type DialogState = { title: string; message: string; tone?: DialogTone; confirmLabel?: string; cancelLabel?: string; onConfirm?: () => void } | null;
 
 export function WalletDialog({ state, close }: { state: DialogState; close: () => void }) {
   const scale = useRef(new Animated.Value(0.88)).current;
@@ -70,7 +71,10 @@ export function WalletDialog({ state, close }: { state: DialogState; close: () =
           <View style={[styles.dialogIcon, { backgroundColor: `${accent}22` }]}><Ionicons name={icon} size={34} color={accent} /></View>
           <Text style={styles.dialogTitle}>{state.title}</Text>
           <Text style={styles.dialogMessage}>{state.message}</Text>
-          <GradientButton label={state.confirmLabel || 'Entendido'} onPress={() => { close(); state.onConfirm?.(); }} />
+          <View style={styles.dialogActions}>
+            <GradientButton label={state.confirmLabel || 'Entendido'} onPress={() => { close(); state.onConfirm?.(); }} />
+            {state.cancelLabel ? <OutlineButton label={state.cancelLabel} onPress={close} /> : null}
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -143,7 +147,7 @@ export function CoinIcon({ asset, size = 43 }: { asset: Pick<Asset, 'symbol' | '
   );
 }
 
-export function Card({ children, style }: PropsWithChildren<{ style?: ViewStyle }>) {
+export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
@@ -223,4 +227,5 @@ const styles = StyleSheet.create({
   dialogIcon: { width: 62, height: 62, borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   dialogTitle: { color: colors.text, fontSize: 22, fontWeight: '800', marginBottom: 9 },
   dialogMessage: { color: colors.muted, fontSize: 15, lineHeight: 22, marginBottom: 22 },
+  dialogActions: { gap: 10 },
 });

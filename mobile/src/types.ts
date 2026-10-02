@@ -72,6 +72,8 @@ export type AdminUser = User & {
   id: number;
   address: string;
   totalUsd: number;
+  emailVerified: boolean;
+  createdAt: string;
 };
 
 export type AuthResponse = {

@@ -380,7 +380,7 @@ export function VerifyEmailScreen({
       <Header title="" onBack={() => navigate('login')} />
       <View style={styles.authLogo}><LogoMark size={72} /></View>
       <Text style={[commonStyles.title, { textAlign: 'center' }]}>Confirma tu correo</Text>
-      <Text style={[commonStyles.subtitle, styles.authSubtitle]}>Enviamos un código de 6 dígitos a {email}.</Text>
+      <Text style={[commonStyles.subtitle, styles.authSubtitle]}>Ingresa el código de 6 dígitos enviado a {email}. Si llegaste aquí al iniciar sesión y el código venció, solicita uno nuevo.</Text>
       <View style={styles.authForm}>
         <Text style={commonStyles.label}>Código de verificación</Text>
         <TextInput
@@ -737,50 +737,90 @@ export function AdminScreen({
   navigate,
   loadUsers,
   submit,
+  verifyUser,
+  resetPassword,
+  deleteUser,
 }: {
   assets: Asset[];
   navigate: Navigate;
   loadUsers: () => Promise<AdminUser[]>;
   submit: (userId: number, symbol: string, amount: number) => Promise<string>;
+  verifyUser: (userId: number) => Promise<{ displayName: string; alreadyVerified: boolean }>;
+  resetPassword: (userId: number) => Promise<{ displayName: string; email: string }>;
+  deleteUser: (userId: number) => Promise<{ displayName: string }>;
 }) {
   const [users, setUsers] = useState<AdminUser[]>([]);
-  const [selectedUser, setSelectedUser] = useState(0);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [selectedAsset, setSelectedAsset] = useState(0);
+  const [search, setSearch] = useState('');
   const [amount, setAmount] = useState('100');
-  const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<'fund' | 'verify' | 'reset' | 'delete' | null>(null);
   const [loading, setLoading] = useState(true);
   const { showDialog, dialog } = useWalletDialog();
   const targets = users.filter((user) => user.role !== 'admin');
-  const target = targets[selectedUser] ?? targets[0];
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredTargets = targets.filter((user) => !normalizedSearch || user.displayName.toLowerCase().includes(normalizedSearch) || user.email.toLowerCase().includes(normalizedSearch) || user.address.toLowerCase().includes(normalizedSearch));
+  const target = targets.find((user) => user.id === selectedUserId) ?? targets[0];
   const asset = assets[selectedAsset] ?? assets[0]!;
   const reload = async () => {
-    try { setUsers(await loadUsers()); } catch (error) { showDialog({ title: 'No se pudieron cargar las cuentas', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
+    try {
+      const loaded = await loadUsers();
+      setUsers(loaded);
+      const available = loaded.filter((user) => user.role !== 'admin');
+      setSelectedUserId((current) => available.some((user) => user.id === current) ? current : (available[0]?.id ?? null));
+    } catch (error) { showDialog({ title: 'No se pudieron cargar las cuentas', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); }
     finally { setLoading(false); }
+  };
+  const runAction = async (action: 'verify' | 'reset' | 'delete', operation: () => Promise<{ title: string; message: string }>) => {
+    try {
+      setBusyAction(action);
+      const result = await operation();
+      await reload();
+      showDialog({ title: result.title, message: result.message, tone: 'success' });
+    } catch (error) {
+      showDialog({ title: 'No se pudo completar la acción', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' });
+    } finally { setBusyAction(null); }
   };
   useEffect(() => { void reload(); }, []);
   return (
     <Screen scroll>
       <Header title="Administración" onBack={() => navigate('profile')} right={<Ionicons name="shield-checkmark" size={23} color="#8F83FF" />} />
-      <Text style={commonStyles.title}>Acreditar saldo</Text>
-      <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 20 }]}>Selecciona una cuenta, el activo y el monto que deseas agregar.</Text>
+      <Text style={commonStyles.title}>Administrar usuarios</Text>
+      <Text style={[commonStyles.subtitle, { marginTop: 8, marginBottom: 18 }]}>Busca, selecciona y gestiona las cuentas registradas.</Text>
+      <View style={styles.adminSearch}><Ionicons name="search" size={20} color={colors.muted} /><TextInput value={search} onChangeText={setSearch} style={styles.adminSearchInput} placeholder="Buscar por nombre, correo o dirección" placeholderTextColor={colors.muted} autoCapitalize="none" /></View>
       {loading ? <Text style={styles.adminEmpty}>Cargando cuentas...</Text> : targets.length === 0 ? <Card><Text style={styles.adminEmpty}>Todavía no hay usuarios registrados.</Text></Card> : (
         <>
-          <Text style={commonStyles.label}>Cuenta de destino</Text>
-          <Pressable onPress={() => setSelectedUser((selectedUser + 1) % targets.length)}>
-            <Card style={styles.adminTarget}>
-              <View style={styles.adminIcon}><Ionicons name="person" size={22} color="#FFF" /></View>
-              <View style={styles.flex}><Text style={styles.assetTitle}>{target?.displayName}</Text><Text style={styles.assetSymbol}>{target?.email}</Text><Text style={styles.settingSub}>Balance total: {money(target?.totalUsd || 0)}</Text></View>
-              <Ionicons name="swap-vertical" size={22} color="#958BFF" />
-            </Card>
-          </Pressable>
-          <Text style={[commonStyles.label, { marginTop: 20 }]}>Activo</Text>
+          <View style={styles.adminListHeader}><Text style={commonStyles.label}>{filteredTargets.length} cuenta{filteredTargets.length === 1 ? '' : 's'}</Text><Text style={styles.adminListHint}>Toca para seleccionar</Text></View>
+          <View style={styles.adminUserList}>
+            {filteredTargets.length ? filteredTargets.map((user) => {
+              const selected = user.id === target?.id;
+              return <Pressable key={user.id} onPress={() => setSelectedUserId(user.id)}>
+                <Card style={[styles.adminUserRow, selected && styles.adminUserRowSelected]}>
+                  <View style={[styles.adminIcon, !user.emailVerified && styles.adminIconPending]}><Ionicons name={user.emailVerified ? 'person' : 'mail-unread'} size={21} color="#FFF" /></View>
+                  <View style={styles.flex}><View style={styles.adminUserNameRow}><Text style={styles.assetTitle}>{user.displayName}</Text><View style={[styles.adminStatus, user.emailVerified ? styles.adminStatusVerified : styles.adminStatusPending]}><Text style={[styles.adminStatusText, { color: user.emailVerified ? colors.success : colors.warning }]}>{user.emailVerified ? 'VERIFICADA' : 'PENDIENTE'}</Text></View></View><Text style={styles.assetSymbol}>{user.email}</Text><Text style={styles.settingSub}>{money(user.totalUsd)} · {user.address.slice(0, 7)}...{user.address.slice(-4)}</Text></View>
+                  <Ionicons name={selected ? 'checkmark-circle' : 'chevron-forward'} size={22} color={selected ? '#6FA8FF' : colors.muted} />
+                </Card>
+              </Pressable>;
+            }) : <Card><Text style={styles.adminEmpty}>No encontramos usuarios con esa búsqueda.</Text></Card>}
+          </View>
+          {target ? <Card style={styles.adminManagement}>
+            <Text style={styles.adminManagementTitle}>Gestionar a {target.displayName}</Text>
+            <Text style={styles.settingSub}>{target.email}</Text>
+            <View style={styles.adminManagementActions}>
+              {!target.emailVerified ? <Pressable disabled={busyAction !== null} onPress={() => void runAction('verify', async () => { const result = await verifyUser(target.id); return { title: 'Cuenta verificada', message: `${result.displayName} ya puede iniciar sesión normalmente.` }; })} style={[styles.adminActionButton, styles.adminActionVerify]}><Ionicons name="checkmark-circle-outline" size={19} color={colors.success} /><Text style={[styles.adminActionText, { color: colors.success }]}>{busyAction === 'verify' ? 'Verificando...' : 'Verificar cuenta'}</Text></Pressable> : null}
+              <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Restablecer contraseña', message: `Se cerrarán las sesiones de ${target.displayName} y se enviará una contraseña temporal a ${target.email}.`, tone: 'info', confirmLabel: 'Restablecer', cancelLabel: 'Cancelar', onConfirm: () => void runAction('reset', async () => { const result = await resetPassword(target.id); return { title: 'Contraseña restablecida', message: `La contraseña temporal fue enviada a ${result.email}.` }; }) })} style={styles.adminActionButton}><Ionicons name="key-outline" size={19} color="#7FB2FF" /><Text style={styles.adminActionText}>{busyAction === 'reset' ? 'Restableciendo...' : 'Restablecer contraseña'}</Text></Pressable>
+              <Pressable disabled={busyAction !== null} onPress={() => showDialog({ title: 'Eliminar usuario', message: `Se eliminarán permanentemente la cuenta, billetera, saldos, tarjetas y movimientos de ${target.displayName}.`, tone: 'error', confirmLabel: 'Eliminar definitivamente', cancelLabel: 'Cancelar', onConfirm: () => void runAction('delete', async () => { const result = await deleteUser(target.id); return { title: 'Usuario eliminado', message: `La cuenta de ${result.displayName} fue eliminada.` }; }) })} style={[styles.adminActionButton, styles.adminActionDelete]}><Ionicons name="trash-outline" size={19} color={colors.danger} /><Text style={[styles.adminActionText, { color: colors.danger }]}>{busyAction === 'delete' ? 'Eliminando...' : 'Eliminar usuario'}</Text></Pressable>
+            </View>
+          </Card> : null}
+          <View style={styles.adminSectionHeader}><Text style={commonStyles.sectionTitle}>Acreditar saldo</Text><Text style={styles.settingSub}>Cuenta seleccionada: {target?.displayName}</Text></View>
+          <Text style={commonStyles.label}>Activo</Text>
           <Pressable onPress={() => setSelectedAsset((selectedAsset + 1) % assets.length)}>
             <Card style={styles.adminTarget}><CoinIcon asset={asset} /><View style={styles.flex}><Text style={styles.assetTitle}>{asset.name}</Text><Text style={styles.assetSymbol}>{asset.symbol}</Text></View><Ionicons name="swap-vertical" size={22} color="#958BFF" /></Card>
           </Pressable>
           <Text style={[commonStyles.label, { marginTop: 20 }]}>Cantidad de {asset.symbol}</Text>
           <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" style={commonStyles.input} placeholder="0.00" placeholderTextColor={colors.muted} />
           <View style={styles.adminPreview}><Text style={styles.infoLabel}>Valor estimado</Text><Text style={styles.infoValue}>{money(Number(amount || 0) * asset.priceUsd)}</Text></View>
-          <View style={styles.bottomAction}><GradientButton label={busy ? 'Acreditando saldo...' : 'Acreditar saldo'} disabled={busy || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusy(true); const name = await submit(target.id, asset.symbol, Number(amount)); showDialog({ title: 'Saldo acreditado', message: `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`, tone: 'success' }); await reload(); } catch (error) { showDialog({ title: 'No se pudo acreditar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusy(false); } }} /></View>
+          <View style={styles.bottomAction}><GradientButton label={busyAction === 'fund' ? 'Acreditando saldo...' : 'Acreditar saldo'} disabled={busyAction !== null || !target || Number(amount) <= 0} onPress={async () => { if (!target) return; try { setBusyAction('fund'); const name = await submit(target.id, asset.symbol, Number(amount)); showDialog({ title: 'Saldo acreditado', message: `${name} recibió ${amountText(Number(amount))} ${asset.symbol}.`, tone: 'success' }); await reload(); } catch (error) { showDialog({ title: 'No se pudo acreditar', message: error instanceof Error ? error.message : 'Intenta nuevamente', tone: 'error' }); } finally { setBusyAction(null); } }} /></View>
         </>
       )}
       {dialog}
@@ -1103,6 +1143,27 @@ const styles = StyleSheet.create({
   profileGroup: { paddingVertical: 0, marginBottom: 18 },
   adminEntry: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 18, borderColor: '#655DFF' },
   adminIcon: { width: 45, height: 45, borderRadius: 15, backgroundColor: '#625EFF', alignItems: 'center', justifyContent: 'center' },
+  adminIconPending: { backgroundColor: '#8A6627' },
+  adminSearch: { minHeight: 56, borderRadius: 17, backgroundColor: colors.surfaceRaised, borderWidth: 1, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 15, marginBottom: 16 },
+  adminSearchInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 0 },
+  adminListHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  adminListHint: { color: colors.muted, fontSize: 11.5, marginBottom: 9 },
+  adminUserList: { gap: 9 },
+  adminUserRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 13 },
+  adminUserRowSelected: { borderColor: '#4A8FFF', backgroundColor: '#121F31' },
+  adminUserNameRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 7 },
+  adminStatus: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  adminStatusVerified: { backgroundColor: 'rgba(37,217,154,.12)' },
+  adminStatusPending: { backgroundColor: 'rgba(242,177,71,.13)' },
+  adminStatusText: { fontSize: 8.5, fontWeight: '900', letterSpacing: 0.6 },
+  adminManagement: { marginTop: 16, padding: 15, borderColor: '#2A4260' },
+  adminManagementTitle: { color: colors.text, fontSize: 17, fontWeight: '800', marginBottom: 4 },
+  adminManagementActions: { gap: 9, marginTop: 15 },
+  adminActionButton: { minHeight: 48, borderRadius: 14, backgroundColor: '#121E2E', borderWidth: 1, borderColor: '#2A3B52', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 12 },
+  adminActionVerify: { backgroundColor: 'rgba(37,217,154,.08)', borderColor: 'rgba(37,217,154,.32)' },
+  adminActionDelete: { backgroundColor: 'rgba(255,86,112,.07)', borderColor: 'rgba(255,86,112,.3)' },
+  adminActionText: { color: '#7FB2FF', fontSize: 13, fontWeight: '800' },
+  adminSectionHeader: { marginTop: 28, marginBottom: 15, gap: 5 },
   adminTarget: { flexDirection: 'row', alignItems: 'center', gap: 13 },
   adminEmpty: { color: colors.muted, textAlign: 'center', paddingVertical: 24 },
   adminPreview: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },

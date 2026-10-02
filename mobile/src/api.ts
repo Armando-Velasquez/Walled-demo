@@ -88,4 +88,10 @@ export const walletApi = {
   adminUsers: () => request<{ users: AdminUser[] }>('/api/v1/admin/users'),
   adminFund: (body: { userId: number; symbol: string; amount: number }) =>
     request<{ recipientName: string }>('/api/v1/admin/fund', { method: 'POST', body: JSON.stringify(body) }),
+  adminVerifyUser: (userId: number) =>
+    request<{ displayName: string; alreadyVerified: boolean }>(`/api/v1/admin/users/${userId}/verify`, { method: 'POST' }),
+  adminResetPassword: (userId: number) =>
+    request<{ displayName: string; email: string }>(`/api/v1/admin/users/${userId}/reset-password`, { method: 'POST' }),
+  adminDeleteUser: (userId: number) =>
+    request<{ displayName: string }>(`/api/v1/admin/users/${userId}`, { method: 'DELETE' }),
 };

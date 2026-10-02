@@ -2,10 +2,12 @@ import { randomBytes } from 'node:crypto';
 import { createSession, hashSecret, verifySecret } from './auth.js';
 import { pool, withTransaction } from './db.js';
 import {
+  accountVerifiedMessage,
   createVerificationCode,
   loginMessage,
   mailTimestamp,
   matchesVerificationCode,
+  passwordResetMessage,
   queueMail,
   transactionMessage,
   verificationMessage,
@@ -334,12 +336,12 @@ export async function updateOnboarding(walletId, completed) {
 }
 
 export async function listUsersForAdmin() {
-  const [rows] = await pool.query(`SELECT u.id, u.display_name, u.email, u.role, w.address,
+  const [rows] = await pool.query(`SELECT u.id, u.display_name, u.email, u.role, u.email_verified_at, u.created_at, w.address,
       COALESCE(SUM(b.balance * a.price_usd), 0) AS total_usd
     FROM users u JOIN wallets w ON w.user_id = u.id
     LEFT JOIN wallet_balances b ON b.wallet_id = w.id
     LEFT JOIN assets a ON a.id = b.asset_id
-    GROUP BY u.id, u.display_name, u.email, u.role, w.address
+    GROUP BY u.id, u.display_name, u.email, u.role, u.email_verified_at, u.created_at, w.address
     ORDER BY u.created_at DESC`);
   return rows.map((row) => ({
     id: row.id,
@@ -348,7 +350,70 @@ export async function listUsersForAdmin() {
     role: row.role,
     address: row.address,
     totalUsd: Number(row.total_usd),
+    emailVerified: Boolean(row.email_verified_at),
+    createdAt: row.created_at,
   }));
+}
+
+export async function verifyUserForAdmin(userId) {
+  return withTransaction(async (connection) => {
+    const [rows] = await connection.query(
+      'SELECT id, display_name, email, role, email_verified_at FROM users WHERE id = ? FOR UPDATE',
+      [userId],
+    );
+    const user = rows[0];
+    if (!user) throw Object.assign(new Error('Usuario no encontrado'), { status: 404 });
+    if (user.role === 'admin') throw Object.assign(new Error('No puedes modificar otra cuenta administrativa'), { status: 403 });
+    if (!user.email_verified_at) {
+      await connection.query('UPDATE users SET email_verified_at = NOW() WHERE id = ?', [user.id]);
+      await connection.query('DELETE FROM email_verification_tokens WHERE user_id = ?', [user.id]);
+      await queueMail(connection, accountVerifiedMessage({ email: user.email, displayName: user.display_name }));
+    }
+    return { displayName: user.display_name, alreadyVerified: Boolean(user.email_verified_at) };
+  });
+}
+
+export async function resetUserPasswordForAdmin(userId) {
+  return withTransaction(async (connection) => {
+    const [rows] = await connection.query(
+      'SELECT id, display_name, email, role FROM users WHERE id = ? FOR UPDATE',
+      [userId],
+    );
+    const user = rows[0];
+    if (!user) throw Object.assign(new Error('Usuario no encontrado'), { status: 404 });
+    if (user.role === 'admin') throw Object.assign(new Error('No puedes modificar otra cuenta administrativa'), { status: 403 });
+    const temporaryPassword = `Wallet-${randomBytes(5).toString('hex').toUpperCase()}!a9`;
+    const passwordHash = await hashSecret(temporaryPassword);
+    await connection.query('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, user.id]);
+    await connection.query('DELETE FROM sessions WHERE user_id = ?', [user.id]);
+    await queueMail(connection, passwordResetMessage({
+      email: user.email,
+      displayName: user.display_name,
+      temporaryPassword,
+    }));
+    return { displayName: user.display_name, email: user.email };
+  });
+}
+
+export async function deleteUserForAdmin(userId) {
+  return withTransaction(async (connection) => {
+    const [rows] = await connection.query(
+      `SELECT u.id, u.display_name, u.role, w.id AS wallet_id
+       FROM users u JOIN wallets w ON w.user_id = u.id WHERE u.id = ? FOR UPDATE`,
+      [userId],
+    );
+    const user = rows[0];
+    if (!user) throw Object.assign(new Error('Usuario no encontrado'), { status: 404 });
+    if (user.role === 'admin') throw Object.assign(new Error('No puedes eliminar una cuenta administrativa'), { status: 403 });
+    await connection.query('DELETE FROM payment_cards WHERE wallet_id = ?', [user.wallet_id]);
+    await connection.query('DELETE FROM transactions WHERE wallet_id = ?', [user.wallet_id]);
+    await connection.query('DELETE FROM wallet_balances WHERE wallet_id = ?', [user.wallet_id]);
+    await connection.query('DELETE FROM sessions WHERE user_id = ?', [user.id]);
+    await connection.query('DELETE FROM email_verification_tokens WHERE user_id = ?', [user.id]);
+    await connection.query('DELETE FROM wallets WHERE id = ?', [user.wallet_id]);
+    await connection.query('DELETE FROM users WHERE id = ?', [user.id]);
+    return { displayName: user.display_name };
+  });
 }
 
 export async function fundUser({ userId, symbol, amount, adminEmail }) {

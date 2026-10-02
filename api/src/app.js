@@ -10,15 +10,18 @@ import {
   createPaymentCard,
   createTransfer,
   createSwap,
+  deleteUserForAdmin,
   getAsset,
   getBootstrap,
   fundUser,
   listUsersForAdmin,
   loginUser,
   registerUser,
+  resetUserPasswordForAdmin,
   resendEmailVerification,
   setDefaultPaymentCard,
   updateOnboarding,
+  verifyUserForAdmin,
   verifyEmail,
 } from './repository.js';
 
@@ -213,6 +216,21 @@ app.post('/api/v1/admin/fund', requireAdmin, asyncRoute(async (request, response
   const symbol = String(request.body.symbol || '').toUpperCase();
   await processingDelay();
   response.status(201).json(await fundUser({ userId, symbol, amount, adminEmail: request.auth.email }));
+}));
+
+app.post('/api/v1/admin/users/:id/verify', requireAdmin, asyncRoute(async (request, response) => {
+  const userId = requirePositiveNumber(request.params.id, 'El usuario');
+  response.json(await verifyUserForAdmin(userId));
+}));
+
+app.post('/api/v1/admin/users/:id/reset-password', requireAdmin, asyncRoute(async (request, response) => {
+  const userId = requirePositiveNumber(request.params.id, 'El usuario');
+  response.json(await resetUserPasswordForAdmin(userId));
+}));
+
+app.delete('/api/v1/admin/users/:id', requireAdmin, asyncRoute(async (request, response) => {
+  const userId = requirePositiveNumber(request.params.id, 'El usuario');
+  response.json(await deleteUserForAdmin(userId));
 }));
 
 app.use((error, _request, response, _next) => {
